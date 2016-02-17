@@ -65,10 +65,10 @@ all_objs= $(femasmduserapi_obj)  $(mduserdemo_obj)
 all_libs= $(femasmduserapi_lib)  $(mduserdemo_lib) 
 INCLUDEDIR= $(femasmduserapi_includedir)  $(mduserdemo_includedir) 
 
-../../source/mduserdemo/MsClient.o: ../../source/mduserdemo/MsClient.cpp $(mduserdemo_include)  
-../../source/mduserdemo/USTPMDHandler.o: ../../source/mduserdemo/USTPMDHandler.cpp $(mduserdemo_include)  
-../../source/mduserdemo/USTPMDClient.o: ../../source/mduserdemo/USTPMDClient.cpp $(mduserdemo_include)  
-../../source/mduserdemo/profile.o: ../../source/mduserdemo/profile.cpp $(mduserdemo_include)  
+../../source/mduserdemo/MsClient.o: MsClient.cpp $(mduserdemo_include)
+../../source/mduserdemo/USTPMDHandler.o: USTPMDHandler.cpp $(mduserdemo_include)
+../../source/mduserdemo/USTPMDClient.o: USTPMDClient.cpp $(mduserdemo_include)
+../../source/mduserdemo/profile.o: profile.cpp $(mduserdemo_include)
 
 copytargetall= 
 pumptargetall= 
