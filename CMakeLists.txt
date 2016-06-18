@@ -14,15 +14,21 @@ ENDIF()
 
 INCLUDE_DIRECTORIES(.
     eal
-    lib/FemasAPIv2/linux64/include)
+    lib/FemasAPIv2/linux64/include
+    lib/libbson/include)
 
 FIND_LIBRARY(femas_libs NAMES USTPtraderapi
             	PATHS ${CMAKE_SOURCE_DIR}/lib/FemasAPIv2/linux64/lib)
 
 FIND_LIBRARY(femasmd_libs NAMES USTPmduserapi
                 PATHS ${CMAKE_SOURCE_DIR}/lib/FemasAPIv2/linux64/lib)
+
+FIND_LIBRARY(bson_libs NAMES bson
+                PATHS ${CMAKE_SOURCE_DIR}/lib/libbson/lib)
+
 message("Femas Lib:" ${femas_libs})
 message("Femas MD lib:" ${femasmd_libs})
+message("Bson lib:" ${bson_libs})
 
 #
 #LINK_DIRECTORIES(/home/hehao/work/ZeusingApi_20150331)
@@ -39,7 +45,8 @@ LIST(APPEND eal_SRCS  eal/lmice_ring.c
     eal/lmice_core.c
     eal/lmice_eal_aio.c
     eal/lmice_eal_thread.c
-    eal/lmice_bloomfilter.c )
+    eal/lmice_bloomfilter.c
+    eal/lmice_eal_bson.cpp )
 
 #Shared EAL Library
 #ADD_LIBRARY(eal SHARED ${EAL_SRCS})
@@ -55,7 +62,7 @@ LIST(APPEND lmiced_SRCS app/lmiced/lmiced.c
     app/lmiced/udss.c)
 
 ADD_EXECUTABLE(lmiced ${lmiced_SRCS})
-target_link_libraries(lmiced eal_static pthread rt)
+target_link_libraries(lmiced eal_static pthread rt ${bson_libs})
 add_dependencies(lmiced eal_static)
 
 #App udstest
@@ -82,7 +89,7 @@ LIST(APPEND fmtrader_SRC app/lmiced/fmtrader.cpp
     app/lmiced/lmspi.cpp
 )
 ADD_EXECUTABLE(fmtrader ${fmtrader_SRC})
-target_link_libraries(fmtrader eal_static pthread rt ${femas_libs})
+target_link_libraries(fmtrader eal_static pthread rt ${femas_libs} ${bson_libs})
 add_dependencies(fmtrader eal_static)
 
 #App guava md
@@ -93,7 +100,7 @@ LIST(APPEND guavamd_SRC app/guavamd/guava_demo.cpp
     app/guavamd/socket_multicast.cpp )
 
 ADD_EXECUTABLE(guavamd ${guavamd_SRC})
-target_link_libraries(guavamd eal_static pthread rt dl)
+target_link_libraries(guavamd eal_static pthread rt dl ${bson_libs})
 add_dependencies(guavamd eal_static)
 
 
@@ -105,5 +112,5 @@ app/femasmd/USTPMDHandler.cpp
 )
 
 add_executable(femasmd ${fmmd_SRC})
-target_link_libraries(femasmd eal_static pthread rt ${femasmd_libs})
+target_link_libraries(femasmd eal_static pthread rt ${femasmd_libs} ${bson_libs})
 add_dependencies(femasmd eal_static)
