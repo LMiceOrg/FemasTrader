@@ -1,0 +1,67 @@
+****
+**** 请使用最新版本的文件替换相应的dll或.so文件。
+****
+
+
+飞马API_V1.01修改内容说明：
+1. USTPFtdcUserApiDataType.h增加一户四码枚举类型，做市商。
+2. USTPFtdcUserApiDataType.h增加报单价格条件类型，最优价和五档价。
+
+注意：本次升级中包含API的更新，请及时通知客户替换API，升级后的API版本号为FemasAPI_V1.01
+客户可通过API中的GetVersion方法查询当前API版本或参考登录回报OnRspUserLogin中ProductInfo字段。
+1、请API使用者替换头文件USTPFtdcUserApiDataType.h
+USTPFtdcUserApiDataType.h头文件中报单价格类型和投机套保标志增加了枚举类型
+/////////////////////////////////////////////////////////////////////////
+///TFtdcUstpOrderPriceTypeType是一个报单价格条件类型
+/////////////////////////////////////////////////////////////////////////
+///任意价
+#define USTP_FTDC_OPT_AnyPrice '1'
+///限价
+#define USTP_FTDC_OPT_LimitPrice '2'
+///最优价
+#define USTP_FTDC_OPT_BestPrice '3'
+///五档价
+#define USTP_FTDC_OPT_FiveLevelPrice '4'
+typedef char TUstpFtdcOrderPriceTypeType;
+
+/////////////////////////////////////////////////////////////////////////
+///TFtdcUstpHedgeFlagType是一个投机套保标志类型
+/////////////////////////////////////////////////////////////////////////
+///投机
+#define USTP_FTDC_CHF_Speculation '1'
+///套利
+#define USTP_FTDC_CHF_Arbitrage '2'
+///套保
+#define USTP_FTDC_CHF_Hedge '3'
+///做市商
+#define USTP_FTDC_CHF_MarketMaker '4'
+typedef char TUstpFtdcHedgeFlagType;
+
+2、 请LINUX环境下的API使用者替换 libUSTPtraderapi.so 和 libUSTPmduserapi.so后重新编译
+请WINDOWS环境下API使用者替换USTPtraderapi.dll及USTPtraderapi.lib后重新编译（行情dll和.lib也需要重新编译）
+ 若有API使用者在代码中直接使用ERRORID作为逻辑处理判断条件，请仔细对比新的错误代码修改对应的ERRORID，并重新编译。
+  例如，如果代码中出现如下表述，请及时修改。
+  if(pRspInfo!=NULL&&183==pRspInfo->ErrorID)   //直接使用错误码183
+{    
+	printf("错误原因：%s\n",pRspInfo->ErrorMsg);
+	……
+}
+修改为
+ if(pRspInfo!=NULL&& ERROR_TRADINGID_NOT_EXIST==pRspInfo->ErrorID)  //使用错误码183对应的宏
+{    
+	printf("错误原因：%s\n",pRspInfo->ErrorMsg);
+	……
+}
+
+飞马API V1.00修改内容说明：
+1. 新增出入金回报接口
+	
+	///账户出入金回报
+	virtual void OnRtnInvestorAccountDeposit(CUstpFtdcInvestorAccountDepositResField *pInvestorAccountDepositRes) {};
+
+
+
+---------------------------------------------------------
+
+飞马API V0.92的修改内容说明：
+1.解决了同一个进程下交易和行情只能连上一个的缺陷。
