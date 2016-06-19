@@ -227,6 +227,15 @@ void eal_trace_color_print_per_thread(int type);
             info->pid, info->tid, info->systime, ##__VA_ARGS__); \
     fclose(fp); \
     }while(0);
+
+#define LMICE_TRACE_PER_THREAD3(info, data, length) do{ \
+		char bsonFilename[64];  \
+		sprintf(bsonFilename, "/var/log/bson-%s-[%d-0x%lx]", info->model_name, info->pid, info->tid ); \
+	    FILE* fp = fopen(bsonFilename, "ba+");  \
+	    fwrite( data, length, 1, fp ); \
+	    fclose(fp); \
+    }while(0);
+
 #endif
 
 #define LMICE_TRACE_TYPE 1
@@ -239,6 +248,20 @@ typedef struct {
     int64_t tid;
 
 } lmice_trace_info_t;
+
+
+#define LMICE_TRACE_BSON_TYPE 2
+typedef struct {
+    int type;   /* type == 2 */
+    time_t tm;
+    int64_t systime;
+    pid_t pid;
+    int64_t tid;
+	char model_name[32];
+
+} lmice_trace_bson_info_t;
+
+
 
 #define lmice_info_print        printf("%s:(%d)\n", __FILE__, __LINE__);EAL_TRACE_COLOR_PRINT_THREAD(info)
 #define lmice_debug_print       printf("%s:(%d)\n", __FILE__, __LINE__); EAL_TRACE_COLOR_PRINT_THREAD(debug)
@@ -255,6 +278,7 @@ typedef struct {
 
 #define lmice_logging(info, format,...) LMICE_TRACE_PER_THREAD2(info, format, ##__VA_ARGS__)
 
+#define lmice_logging_bson(info, data, length) LMICE_TRACE_PER_THREAD3(info, data, length)
 
 #ifdef __cplusplus
 }
