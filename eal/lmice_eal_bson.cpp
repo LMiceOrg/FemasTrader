@@ -2,9 +2,21 @@
 
 const char * EalBson::GetJsonData()
 {
-	char * strJson = NULL;
-	strJson = bson_as_json(m_ptr_bson, NULL);
-	return strJson;
+	if( NULL != m_strJson )
+	{
+		bson_free( m_strJson );
+		m_strJson = NULL;
+	}
+	m_strJson = bson_as_json(m_ptr_bson, NULL);
+	return m_strJson;
+}
+
+void EalBson::FreeJsonData()
+{
+	if( NULL != m_strJson )
+	{
+		bson_free( m_strJson );
+	}
 }
 
 int EalBson::AppendArray( const char*key, EalBson *bsonObj )
