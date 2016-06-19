@@ -5,10 +5,13 @@
 #include "fmspi.h"
 
 #include "lmice_trace.h"
+#include "lmice_eal_bson.h"
 
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
+
+#define OPT_LOG_DEBUG 1
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
@@ -155,8 +158,28 @@ void CTraderSpi::OnRspUserLogin(CUstpFtdcRspUserLoginField *pRspUserLogin, CUstp
 
 void CTraderSpi::OnRspOrderInsert(CUstpFtdcInputOrderField *pInputOrder, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+#ifdef OPT_LOG_DEBUG
+	int64_t systime = 0;
+	get_system_time(&systime);
+	EalBson bson;
+	const char *strJson = NULL;
+	bson.AppendInt64("time", systime);
+#endif
+
 	if (pRspInfo!=NULL&&pRspInfo->ErrorID!=0)
 	{
+
+#ifdef OPT_LOG_DEBUG
+
+		bson.AppendUtf8( "reason", gbktoutf8( pRspInfo->ErrorMsg).c_str() );
+
+		strJson = bson.GetJsonData();
+		
+		logging("[future opt] recv (OnRspOrderInsert), failed , content: %s", strJson);
+		
+		bson.FreeJsonData();
+#endif
+		
 		printf("-----------------------------\n");
         printf("报单失败 错误原因：%s\n",gbktoutf8( pRspInfo->ErrorMsg).c_str());
 		printf("-----------------------------\n");
@@ -164,9 +187,57 @@ void CTraderSpi::OnRspOrderInsert(CUstpFtdcInputOrderField *pInputOrder, CUstpFt
 	}
 	if(pInputOrder==NULL)
 	{
+#ifdef OPT_LOG_DEBUG
+
+		strJson = bson.GetJsonData();
+		
+		logging("[future opt] recv (OnRspOrderInsert), empty , content: %s", strJson);
+		
+		bson.FreeJsonData();
+#endif
+
+	
 		printf("没有报单数据\n");
 		return;
 	}
+
+#ifdef OPT_LOG_DEBUG
+
+	bson.AppendSymbol("BrokerID", pInputOrder->BrokerID);
+	bson.AppendSymbol("ExchangeID", pInputOrder->ExchangeID);
+	bson.AppendSymbol("OrderSysID", pInputOrder->OrderSysID);
+	bson.AppendSymbol("InvestorID", pInputOrder->InvestorID);
+	bson.AppendSymbol("UserID", pInputOrder->UserID);
+	bson.AppendSymbol("InstrumentID", pInputOrder->InstrumentID);
+	bson.AppendSymbol("UserOrderLocalID", pInputOrder->UserOrderLocalID);
+	bson.AppendFlag("OrderPriceType", pInputOrder->OrderPriceType);
+	bson.AppendFlag("Direction", pInputOrder->Direction);
+	bson.AppendFlag("OffsetFlag", pInputOrder->OffsetFlag);
+	bson.AppendFlag("HedgeFlag", pInputOrder->HedgeFlag);
+	bson.AppendDouble("LimitPrice",pInputOrder->LimitPrice);
+	bson.AppendInt64("Volume",pInputOrder->Volume);
+	bson.AppendFlag("TimeCondition", pInputOrder->TimeCondition);
+	bson.AppendSymbol("GTDDate", pInputOrder->GTDDate);
+	bson.AppendFlag("VolumeCondition", pInputOrder->VolumeCondition);
+	bson.AppendInt64("MinVolume",pInputOrder->MinVolume);
+	bson.AppendDouble("StopPrice",pInputOrder->StopPrice);
+	bson.AppendFlag("ForceCloseReason", pInputOrder->ForceCloseReason);
+	bson.AppendInt64("MinVolume",pInputOrder->MinVolume);
+	bson.AppendInt64("IsAutoSuspend",pInputOrder->IsAutoSuspend);
+	bson.AppendSymbol("BusinessUnit", pInputOrder->BusinessUnit);
+	bson.AppendSymbol("UserCustom", pInputOrder->UserCustom);
+	bson.AppendInt64("BusinessLocalID",pInputOrder->BusinessLocalID);
+	bson.AppendSymbol("ActionDay", pInputOrder->ActionDay);
+
+
+	strJson = bson.GetJsonData();
+
+	logging("[future opt] recv (OnRspOrderInsert), success , content: %s", strJson);
+
+	bson.FreeJsonData();
+#endif
+
+	
 	printf("-----------------------------\n");
 	printf("报单成功\n");
 	printf("-----------------------------\n");
@@ -177,6 +248,43 @@ void CTraderSpi::OnRspOrderInsert(CUstpFtdcInputOrderField *pInputOrder, CUstpFt
 
 void CTraderSpi::OnRtnTrade(CUstpFtdcTradeField *pTrade)
 {
+
+#ifdef OPT_LOG_DEBUG
+	
+		int64_t systime = 0;
+		get_system_time(&systime);
+		EalBson bson;
+		bson.AppendInt64("time", systime);
+
+		bson.AppendSymbol("BrokerID", pTrade->BrokerID);
+		bson.AppendSymbol("ExchangeID", pTrade->ExchangeID);
+		bson.AppendSymbol("TradingDay", pTrade->TradingDay);
+		bson.AppendSymbol("ParticipantID", pTrade->ParticipantID);
+		bson.AppendSymbol("InvestorID", pTrade->InvestorID);
+		bson.AppendSymbol("ClientID", pTrade->ClientID);
+		bson.AppendSymbol("SeatID", pTrade->SeatID);
+		bson.AppendSymbol("UserID", pTrade->UserID);
+		bson.AppendSymbol("TradeID", pTrade->TradeID);
+		bson.AppendSymbol("OrderSysID", pTrade->OrderSysID);
+		bson.AppendSymbol("UserOrderLocalID", pTrade->UserOrderLocalID);
+		bson.AppendSymbol("InstrumentID", pTrade->InstrumentID);
+		bson.AppendFlag("Direction", pTrade->Direction);
+		bson.AppendFlag("OffsetFlag", pTrade->OffsetFlag);
+		bson.AppendFlag("HedgeFlag", pTrade->HedgeFlag);
+		bson.AppendDouble("TradePrice", pTrade->TradePrice);
+		bson.AppendInt64("TradeVolume", pTrade->TradeVolume);
+		bson.AppendSymbol("TradeTime", pTrade->TradeTime);			
+		bson.AppendSymbol("ClearingPartID", pTrade->ClearingPartID);	
+		bson.AppendInt64("BusinessLocalID", pTrade->BusinessLocalID);
+		bson.AppendSymbol("ActionDay", pTrade->ActionDay);	
+	
+		const char *strJson = bson.GetJsonData();
+	
+		logging("[future opt] recv ( OnRtnTrade ), content: %s", strJson);
+	
+		bson.FreeJsonData();
+#endif 
+
 	printf("-----------------------------\n");
 	printf("收到成交回报\n");
 	Show(pTrade);
@@ -219,6 +327,59 @@ void CTraderSpi::Show(CUstpFtdcOrderField *pOrder)
 
 void CTraderSpi::OnRtnOrder(CUstpFtdcOrderField *pOrder)
 {
+
+#ifdef OPT_LOG_DEBUG
+		
+			int64_t systime = 0;
+			get_system_time(&systime);
+			EalBson bson;
+			bson.AppendInt64("time", systime);
+
+			bson.AppendSymbol("BrokerID", pOrder->BrokerID);
+			bson.AppendSymbol("ExchangeID", pOrder->ExchangeID);
+			bson.AppendSymbol("OrderSysID", pOrder->OrderSysID);
+			bson.AppendSymbol("InvestorID", pOrder->InvestorID);
+			bson.AppendSymbol("UserID", pOrder->UserID);
+			bson.AppendSymbol("InstrumentID", pOrder->InstrumentID);
+			bson.AppendSymbol("UserOrderLocalID", pOrder->UserOrderLocalID);
+			bson.AppendFlag("OrderPriceType", pOrder->OrderPriceType);
+			bson.AppendFlag("Direction", pOrder->Direction);
+			bson.AppendFlag("OffsetFlag", pOrder->OffsetFlag);
+			bson.AppendFlag("HedgeFlag", pOrder->HedgeFlag);
+			bson.AppendDouble("LimitPrice", pOrder->LimitPrice);
+			bson.AppendInt64("Volume", pOrder->Volume);
+			bson.AppendFlag("TimeCondition", pOrder->TimeCondition);
+			bson.AppendSymbol("GTDDate", pOrder->GTDDate);
+			bson.AppendFlag("VolumeCondition", pOrder->VolumeCondition);
+			bson.AppendInt64("MinVolume", pOrder->MinVolume);
+			bson.AppendDouble("StopPrice", pOrder->StopPrice);
+			bson.AppendFlag("ForceCloseReason", pOrder->ForceCloseReason);
+			bson.AppendInt64("IsAutoSuspend", pOrder->IsAutoSuspend);
+			bson.AppendSymbol("BusinessUnit", pOrder->BusinessUnit);
+			bson.AppendSymbol("UserCustom", pOrder->UserCustom);
+			bson.AppendInt64("BusinessLocalID", pOrder->BusinessLocalID);
+			bson.AppendSymbol("ActionDay", pOrder->ActionDay);
+			bson.AppendSymbol("TradingDay", pOrder->TradingDay);
+			bson.AppendSymbol("ParticipantID", pOrder->ParticipantID);
+			bson.AppendSymbol("ClientID", pOrder->ClientID);
+			bson.AppendSymbol("SeatID", pOrder->SeatID);
+			bson.AppendSymbol("InsertTime", pOrder->InsertTime);
+			bson.AppendSymbol("OrderLocalID", pOrder->OrderLocalID);
+			bson.AppendFlag("OrderSource", pOrder->OrderSource);
+			bson.AppendFlag("OrderStatus", pOrder->OrderStatus);
+			bson.AppendSymbol("CancelTime", pOrder->CancelTime);
+			bson.AppendSymbol("CancelUserID", pOrder->CancelUserID);
+			bson.AppendInt64("VolumeTraded", pOrder->VolumeTraded);
+			bson.AppendInt64("VolumeRemain", pOrder->VolumeRemain);
+
+			const char *strJson = bson.GetJsonData();
+		
+			logging("[future opt] recv ( OnRtnOrder ), content: %s", strJson);
+		
+			bson.FreeJsonData();
+#endif 
+
+
 	printf("-----------------------------\n");
 	printf("收到报单回报\n");
 	Show(pOrder);
@@ -228,8 +389,30 @@ void CTraderSpi::OnRtnOrder(CUstpFtdcOrderField *pOrder)
 
 void CTraderSpi::OnRspOrderAction(CUstpFtdcOrderActionField *pOrderAction, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+
+#ifdef OPT_LOG_DEBUG
+		int64_t systime = 0;
+		get_system_time(&systime);
+		EalBson bson;
+		const char *strJson = NULL;
+		bson.AppendInt64("time", systime);
+#endif
+
+
 	if (pRspInfo!=NULL&&pRspInfo->ErrorID!=0)
 	{
+
+#ifdef OPT_LOG_DEBUG
+		
+		bson.AppendUtf8( "reason", gbktoutf8( pRspInfo->ErrorMsg).c_str() );
+
+		strJson = bson.GetJsonData();
+		
+		logging("[future opt] recv (OnRspOrderAction), failed , content: %s", strJson);
+		
+		bson.FreeJsonData();
+#endif
+
 		printf("-----------------------------\n");
         printf("撤单失败 错误原因：%s\n",gbktoutf8( pRspInfo->ErrorMsg).c_str());
 		printf("-----------------------------\n");
@@ -237,9 +420,40 @@ void CTraderSpi::OnRspOrderAction(CUstpFtdcOrderActionField *pOrderAction, CUstp
 	}
 	if(pOrderAction==NULL)
 	{
+#ifdef OPT_LOG_DEBUG
+		
+		strJson = bson.GetJsonData();
+		
+		logging("[future opt] recv (OnRspOrderAction), empty , content: %s", strJson);
+		
+		bson.FreeJsonData();
+#endif
+
 		printf("没有撤单数据\n");
 		return;
 	}
+
+#ifdef OPT_LOG_DEBUG
+	
+	bson.AppendSymbol("BrokerID", pOrderAction->BrokerID);
+	bson.AppendSymbol("ExchangeID", pOrderAction->ExchangeID);
+	bson.AppendSymbol("OrderSysID", pOrderAction->OrderSysID);
+	bson.AppendSymbol("InvestorID", pOrderAction->InvestorID);
+	bson.AppendSymbol("UserID", pOrderAction->UserID);
+	bson.AppendSymbol("UserOrderLocalID", pOrderAction->UserOrderLocalID);
+	bson.AppendSymbol("UserOrderActionLocalID", pOrderAction->UserOrderActionLocalID);
+	bson.AppendFlag("ActionFlag", pOrderAction->ActionFlag);
+	bson.AppendDouble("LimitPrice",pOrderAction->LimitPrice);
+	bson.AppendInt64("VolumeChange",pOrderAction->VolumeChange);
+	bson.AppendInt64("BusinessLocalID",pOrderAction->BusinessLocalID);
+
+	strJson = bson.GetJsonData();
+
+	logging("[future opt] recv (OnRspOrderAction), success , content: %s", strJson);
+
+	bson.FreeJsonData();
+#endif
+
 	printf("-----------------------------\n");
 	printf("撤单成功\n");
 	printf("-----------------------------\n");
@@ -267,8 +481,29 @@ void CTraderSpi::OnRspUserPasswordUpdate(CUstpFtdcUserPasswordUpdateField *pUser
 
 void CTraderSpi::OnErrRtnOrderInsert(CUstpFtdcInputOrderField *pInputOrder, CUstpFtdcRspInfoField *pRspInfo)
 {
+
+#ifdef OPT_LOG_DEBUG
+	int64_t systime = 0;
+	get_system_time(&systime);
+	EalBson bson;
+	const char *strJson = NULL;
+	bson.AppendInt64("time", systime);
+#endif
+
+
 	if (pRspInfo!=NULL&&pRspInfo->ErrorID!=0)
 	{
+
+#ifdef OPT_LOG_DEBUG
+		
+		bson.AppendUtf8( "reason", gbktoutf8( pRspInfo->ErrorMsg).c_str() );
+
+		strJson = bson.GetJsonData();
+		
+		logging("[future opt] recv (OnErrRtnOrderInsert), failed , content: %s", strJson);
+		
+		bson.FreeJsonData();
+#endif
 		printf("-----------------------------\n");
         printf("报单错误回报失败 错误原因：%s\n",gbktoutf8( pRspInfo->ErrorMsg).c_str());
 		printf("-----------------------------\n");
@@ -276,9 +511,58 @@ void CTraderSpi::OnErrRtnOrderInsert(CUstpFtdcInputOrderField *pInputOrder, CUst
 	}
 	if(pInputOrder==NULL)
 	{
+#ifdef OPT_LOG_DEBUG
+				
+		strJson = bson.GetJsonData();
+		
+		logging("[future opt] recv (OnErrRtnOrderInsert), empty , content: %s", strJson);
+		
+		bson.FreeJsonData();
+#endif
+
+	
 		printf("没有数据\n");
 		return;
 	}
+
+#ifdef OPT_LOG_DEBUG
+	
+		bson.AppendSymbol("BrokerID", pInputOrder->BrokerID);
+		bson.AppendSymbol("ExchangeID", pInputOrder->ExchangeID);
+		bson.AppendSymbol("OrderSysID", pInputOrder->OrderSysID);
+		bson.AppendSymbol("InvestorID", pInputOrder->InvestorID);
+		bson.AppendSymbol("UserID", pInputOrder->UserID);
+		bson.AppendSymbol("InstrumentID", pInputOrder->InstrumentID);
+		bson.AppendSymbol("UserOrderLocalID", pInputOrder->UserOrderLocalID);
+		bson.AppendFlag("OrderPriceType", pInputOrder->OrderPriceType);
+		bson.AppendFlag("Direction", pInputOrder->Direction);
+		bson.AppendFlag("OffsetFlag", pInputOrder->OffsetFlag);
+		bson.AppendFlag("HedgeFlag", pInputOrder->HedgeFlag);
+		bson.AppendDouble("LimitPrice",pInputOrder->LimitPrice);
+		bson.AppendInt64("Volume",pInputOrder->Volume);
+		bson.AppendFlag("TimeCondition", pInputOrder->TimeCondition);
+		bson.AppendSymbol("GTDDate", pInputOrder->GTDDate);
+		bson.AppendFlag("VolumeCondition", pInputOrder->VolumeCondition);
+		bson.AppendInt64("MinVolume",pInputOrder->MinVolume);
+		bson.AppendDouble("StopPrice",pInputOrder->StopPrice);
+		bson.AppendFlag("ForceCloseReason", pInputOrder->ForceCloseReason);
+		bson.AppendInt64("MinVolume",pInputOrder->MinVolume);
+		bson.AppendInt64("IsAutoSuspend",pInputOrder->IsAutoSuspend);
+		bson.AppendSymbol("BusinessUnit", pInputOrder->BusinessUnit);
+		bson.AppendSymbol("UserCustom", pInputOrder->UserCustom);
+		bson.AppendInt64("BusinessLocalID",pInputOrder->BusinessLocalID);
+		bson.AppendSymbol("ActionDay", pInputOrder->ActionDay);
+	
+	
+		strJson = bson.GetJsonData();
+	
+		logging("[future opt] recv (OnErrRtnOrderInsert), success , content: %s", strJson);
+	
+		bson.FreeJsonData();
+#endif
+
+
+	
 	printf("-----------------------------\n");
 	printf("报单错误回报\n");
 	printf("-----------------------------\n");
@@ -286,8 +570,30 @@ void CTraderSpi::OnErrRtnOrderInsert(CUstpFtdcInputOrderField *pInputOrder, CUst
 }
 void CTraderSpi::OnErrRtnOrderAction(CUstpFtdcOrderActionField *pOrderAction, CUstpFtdcRspInfoField *pRspInfo)
 {
+
+#ifdef OPT_LOG_DEBUG
+		int64_t systime = 0;
+		get_system_time(&systime);
+		EalBson bson;
+		const char *strJson = NULL;
+		bson.AppendInt64("time", systime);
+#endif
+
 	if (pRspInfo!=NULL&&pRspInfo->ErrorID!=0)
 	{
+	
+#ifdef OPT_LOG_DEBUG
+				
+				bson.AppendUtf8( "reason", gbktoutf8( pRspInfo->ErrorMsg).c_str() );
+		
+				strJson = bson.GetJsonData();
+				
+				logging("[future opt] recv (OnErrRtnOrderAction), failed , content: %s", strJson);
+				
+				bson.FreeJsonData();
+#endif
+
+	
 		printf("-----------------------------\n");
         printf("撤单错误回报失败 错误原因：%s\n",gbktoutf8( pRspInfo->ErrorMsg).c_str());
 		printf("-----------------------------\n");
@@ -295,9 +601,42 @@ void CTraderSpi::OnErrRtnOrderAction(CUstpFtdcOrderActionField *pOrderAction, CU
 	}
 	if(pOrderAction==NULL)
 	{
+#ifdef OPT_LOG_DEBUG
+						
+				strJson = bson.GetJsonData();
+				
+				logging("[future opt] recv (OnErrRtnOrderAction), empty , content: %s", strJson);
+				
+				bson.FreeJsonData();
+#endif
+
+	
 		printf("没有数据\n");
 		return;
 	}
+
+
+#ifdef OPT_LOG_DEBUG
+		
+		bson.AppendSymbol("BrokerID", pOrderAction->BrokerID);
+		bson.AppendSymbol("ExchangeID", pOrderAction->ExchangeID);
+		bson.AppendSymbol("OrderSysID", pOrderAction->OrderSysID);
+		bson.AppendSymbol("InvestorID", pOrderAction->InvestorID);
+		bson.AppendSymbol("UserID", pOrderAction->UserID);
+		bson.AppendSymbol("UserOrderLocalID", pOrderAction->UserOrderLocalID);
+		bson.AppendSymbol("UserOrderActionLocalID", pOrderAction->UserOrderActionLocalID);
+		bson.AppendFlag("ActionFlag", pOrderAction->ActionFlag);
+		bson.AppendDouble("LimitPrice",pOrderAction->LimitPrice);
+		bson.AppendInt64("VolumeChange",pOrderAction->VolumeChange);
+		bson.AppendInt64("BusinessLocalID",pOrderAction->BusinessLocalID);
+	
+		strJson = bson.GetJsonData();
+	
+		logging("[future opt] recv (OnErrRtnOrderAction), success , content: %s", strJson);
+	
+		bson.FreeJsonData();
+#endif
+
 	printf("-----------------------------\n");
 	printf("撤单错误回报\n");
 	printf("-----------------------------\n");
@@ -306,8 +645,28 @@ void CTraderSpi::OnErrRtnOrderAction(CUstpFtdcOrderActionField *pOrderAction, CU
 
 void CTraderSpi::OnRspQryOrder(CUstpFtdcOrderField *pOrder, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+
+#ifdef OPT_LOG_DEBUG
+			int64_t systime = 0;
+			get_system_time(&systime);
+			EalBson bson;
+			const char *strJson = NULL;
+			bson.AppendInt64("time", systime);
+#endif
+
 	if (pRspInfo!=NULL&&pRspInfo->ErrorID!=0)
 	{
+
+#ifdef OPT_LOG_DEBUG
+				
+		bson.AppendUtf8( "reason", gbktoutf8( pRspInfo->ErrorMsg).c_str() );
+
+		strJson = bson.GetJsonData();
+		
+		logging("[future opt] recv (OnRspQryOrder), failed , content: %s", strJson);
+		
+		bson.FreeJsonData();
+#endif
 		printf("-----------------------------\n");
         printf("查询报单失败 错误原因：%s\n",gbktoutf8( pRspInfo->ErrorMsg).c_str());
 		printf("-----------------------------\n");
@@ -315,9 +674,66 @@ void CTraderSpi::OnRspQryOrder(CUstpFtdcOrderField *pOrder, CUstpFtdcRspInfoFiel
 	}
 	if(pOrder==NULL)
 	{
+#ifdef OPT_LOG_DEBUG
+						
+		strJson = bson.GetJsonData();
+		
+		logging("[future opt] recv (OnRspQryOrder), empty , content: %s", strJson);
+		
+		bson.FreeJsonData();
+#endif
+
 		printf("没有查询到报单数据\n");
 		return;
 	}
+
+#ifdef OPT_LOG_DEBUG
+			
+	bson.AppendSymbol("BrokerID", pOrder->BrokerID);
+	bson.AppendSymbol("ExchangeID", pOrder->ExchangeID);
+	bson.AppendSymbol("OrderSysID", pOrder->OrderSysID);
+	bson.AppendSymbol("InvestorID", pOrder->InvestorID);
+	bson.AppendSymbol("UserID", pOrder->UserID);
+	bson.AppendSymbol("InstrumentID", pOrder->InstrumentID);
+	bson.AppendSymbol("UserOrderLocalID", pOrder->UserOrderLocalID);
+	bson.AppendFlag("OrderPriceType", pOrder->OrderPriceType);
+	bson.AppendFlag("Direction", pOrder->Direction);
+	bson.AppendFlag("OffsetFlag", pOrder->OffsetFlag);
+	bson.AppendFlag("HedgeFlag", pOrder->HedgeFlag);
+	bson.AppendDouble("LimitPrice", pOrder->LimitPrice);
+	bson.AppendInt64("Volume", pOrder->Volume);
+	bson.AppendFlag("TimeCondition", pOrder->TimeCondition);
+	bson.AppendSymbol("GTDDate", pOrder->GTDDate);
+	bson.AppendFlag("VolumeCondition", pOrder->VolumeCondition);
+	bson.AppendInt64("MinVolume", pOrder->MinVolume);
+	bson.AppendDouble("StopPrice", pOrder->StopPrice);
+	bson.AppendFlag("ForceCloseReason", pOrder->ForceCloseReason);
+	bson.AppendInt64("IsAutoSuspend", pOrder->IsAutoSuspend);
+	bson.AppendSymbol("BusinessUnit", pOrder->BusinessUnit);
+	bson.AppendSymbol("UserCustom", pOrder->UserCustom);
+	bson.AppendInt64("BusinessLocalID", pOrder->BusinessLocalID);
+	bson.AppendSymbol("ActionDay", pOrder->ActionDay);
+	bson.AppendSymbol("TradingDay", pOrder->TradingDay);
+	bson.AppendSymbol("ParticipantID", pOrder->ParticipantID);
+	bson.AppendSymbol("ClientID", pOrder->ClientID);
+	bson.AppendSymbol("SeatID", pOrder->SeatID);
+	bson.AppendSymbol("InsertTime", pOrder->InsertTime);
+	bson.AppendSymbol("OrderLocalID", pOrder->OrderLocalID);
+	bson.AppendFlag("OrderSource", pOrder->OrderSource);
+	bson.AppendFlag("OrderStatus", pOrder->OrderStatus);
+	bson.AppendSymbol("CancelTime", pOrder->CancelTime);
+	bson.AppendSymbol("CancelUserID", pOrder->CancelUserID);
+	bson.AppendInt64("VolumeTraded", pOrder->VolumeTraded);
+	bson.AppendInt64("VolumeRemain", pOrder->VolumeRemain);
+
+
+	strJson = bson.GetJsonData();
+
+	logging("[future opt] recv (OnRspQryOrder), success , content: %s", strJson);
+
+	bson.FreeJsonData();
+#endif
+
 	Show(pOrder);
 	return ;
 }
@@ -346,8 +762,29 @@ void CTraderSpi::Show(CUstpFtdcTradeField *pTrade)
 }
 void CTraderSpi::OnRspQryTrade(CUstpFtdcTradeField *pTrade, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+
+#ifdef OPT_LOG_DEBUG
+				int64_t systime = 0;
+				get_system_time(&systime);
+				EalBson bson;
+				const char *strJson = NULL;
+				bson.AppendInt64("time", systime);
+#endif
+
 	if (pRspInfo!=NULL&&pRspInfo->ErrorID!=0)
 	{
+#ifdef OPT_LOG_DEBUG
+						
+				bson.AppendUtf8( "reason", gbktoutf8( pRspInfo->ErrorMsg).c_str() );
+		
+				strJson = bson.GetJsonData();
+				
+				logging("[future opt] recv (OnRspQryTrade), failed , content: %s", strJson);
+				
+				bson.FreeJsonData();
+#endif
+
+	
 		printf("-----------------------------\n");
         printf("查询成交失败 错误原因：%s\n",gbktoutf8( pRspInfo->ErrorMsg).c_str());
 		printf("-----------------------------\n");
@@ -355,9 +792,52 @@ void CTraderSpi::OnRspQryTrade(CUstpFtdcTradeField *pTrade, CUstpFtdcRspInfoFiel
 	}
 	if(pTrade==NULL)
 	{
+#ifdef OPT_LOG_DEBUG
+						
+		strJson = bson.GetJsonData();
+		
+		logging("[future opt] recv (OnRspQryTrade), empty , content: %s", strJson);
+		
+		bson.FreeJsonData();
+#endif
 		printf("没有查询到成交数据");
 		return;
 	}
+
+#ifdef OPT_LOG_DEBUG
+				
+	bson.AppendSymbol("BrokerID", pTrade->BrokerID);
+	bson.AppendSymbol("ExchangeID", pTrade->ExchangeID);
+	bson.AppendSymbol("TradingDay", pTrade->TradingDay);
+	bson.AppendSymbol("ParticipantID", pTrade->ParticipantID);
+	bson.AppendSymbol("InvestorID", pTrade->InvestorID);
+	bson.AppendSymbol("ClientID", pTrade->ClientID);
+	bson.AppendSymbol("SeatID", pTrade->SeatID);
+	bson.AppendSymbol("UserID", pTrade->UserID);
+	bson.AppendSymbol("TradeID", pTrade->TradeID);
+	bson.AppendSymbol("OrderSysID", pTrade->OrderSysID);
+	bson.AppendSymbol("UserOrderLocalID", pTrade->UserOrderLocalID);
+	bson.AppendSymbol("InstrumentID", pTrade->InstrumentID);
+	bson.AppendFlag("Direction", pTrade->Direction);
+	bson.AppendFlag("OffsetFlag", pTrade->OffsetFlag);
+	bson.AppendFlag("HedgeFlag", pTrade->HedgeFlag);
+	bson.AppendDouble("TradePrice", pTrade->TradePrice);
+	bson.AppendInt64("TradeVolume", pTrade->TradeVolume);
+	bson.AppendSymbol("TradeTime", pTrade->TradeTime);			
+	bson.AppendSymbol("ClearingPartID", pTrade->ClearingPartID);	
+	bson.AppendInt64("BusinessLocalID", pTrade->BusinessLocalID);
+	bson.AppendSymbol("ActionDay", pTrade->ActionDay);	
+
+
+
+	strJson = bson.GetJsonData();
+
+	logging("[future opt] recv (OnRspQryOrder), success , content: %s", strJson);
+
+	bson.FreeJsonData();
+#endif
+
+	
 	Show(pTrade);
 	return ;
 }

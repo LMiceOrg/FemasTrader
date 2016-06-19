@@ -15,12 +15,11 @@
 
 #define SOCK_FILE "/var/run/lmiced.socket"
 
+#define OPT_LOG_DEBUG 1
+
 CLMSpi::CLMSpi(const char *name)
 {
-    ///设置模型名称
     m_name = name;
-
-    ///UnixDomain socket
     create_uds_msg((void**)&sid);
     init_uds_client(SOCK_FILE, sid);
     memset(&m_info, 0, sizeof(m_info));
@@ -238,7 +237,31 @@ int CLMSpi::cancel(int requestId, int sysId)
     /// 发出撤单操作
     spi->GetTrader()->ReqOrderAction(&ord, req);
 
-	logging_bson_cancel( (void *)&ord );
+#ifdef OPT_LOG_DEBUG
+	int64_t systime = 0;
+	get_system_time(&systime);
+	EalBson bson;
+	bson.AppendInt64("time", systime);
+	bson.AppendSymbol("BrokerID", ord.BrokerID);
+	bson.AppendSymbol("ExchangeID", ord.ExchangeID);
+	bson.AppendSymbol("OrderSysID", ord.OrderSysID);
+	bson.AppendSymbol("InvestorID", ord.InvestorID);
+	bson.AppendSymbol("UserID", ord.UserID);
+	bson.AppendSymbol("UserOrderLocalID", ord.UserOrderLocalID);
+	bson.AppendSymbol("UserOrderActionLocalID", ord.UserOrderActionLocalID);
+	bson.AppendFlag("ActionFlag", ord.ActionFlag);
+	bson.AppendDouble("LimitPrice",ord.LimitPrice);
+	bson.AppendInt64("VolumeChange",ord.VolumeChange);
+	bson.AppendInt64("BusinessLocalID",ord.BusinessLocalID);
+
+	const char *strJson = bson.GetJsonData();
+
+	logging("[future opt] send ( cancel ), content: %s", strJson);
+
+	bson.FreeJsonData();
+#endif
+
+	//logging_bson_cancel( (void *)&ord );
 
     return req;
 
@@ -299,7 +322,51 @@ int CLMSpi::order(const char *symbol, int dir, double price, int num)
     ///业务发生日期 。交易日
     TUstpFtdcDateType	ActionDay;
 
-	logging_bson_order( (void *)&ord );
+
+
+#ifdef OPT_LOG_DEBUG
+
+	int64_t systime = 0;
+	get_system_time(&systime);
+	EalBson bson;
+	bson.AppendInt64("time", systime);
+
+	bson.AppendSymbol("BrokerID", ord.BrokerID);
+	bson.AppendSymbol("ExchangeID", ord.ExchangeID);
+	bson.AppendSymbol("OrderSysID", ord.OrderSysID);
+	bson.AppendSymbol("InvestorID", ord.InvestorID);
+	bson.AppendSymbol("UserID", ord.UserID);
+	bson.AppendSymbol("InstrumentID", ord.InstrumentID);
+	bson.AppendSymbol("UserOrderLocalID", ord.UserOrderLocalID);
+	bson.AppendFlag("OrderPriceType", ord.OrderPriceType);
+	bson.AppendFlag("Direction", ord.Direction);
+	bson.AppendFlag("OffsetFlag", ord.OffsetFlag);
+	bson.AppendFlag("HedgeFlag", ord.HedgeFlag);
+	bson.AppendDouble("LimitPrice",ord.LimitPrice);
+	bson.AppendInt64("Volume",ord.Volume);
+	bson.AppendFlag("TimeCondition", ord.TimeCondition);
+	bson.AppendSymbol("GTDDate", ord.GTDDate);
+	bson.AppendFlag("VolumeCondition", ord.VolumeCondition);
+	bson.AppendInt64("MinVolume",ord.MinVolume);
+	bson.AppendDouble("StopPrice",ord.StopPrice);
+	bson.AppendFlag("ForceCloseReason", ord.ForceCloseReason);
+	bson.AppendInt64("MinVolume",ord.MinVolume);
+	bson.AppendInt64("IsAutoSuspend",ord.IsAutoSuspend);
+	bson.AppendSymbol("BusinessUnit", ord.BusinessUnit);
+	bson.AppendSymbol("UserCustom", ord.UserCustom);
+	bson.AppendInt64("BusinessLocalID",ord.BusinessLocalID);
+	bson.AppendSymbol("ActionDay", ord.ActionDay);
+
+
+	const char *strJson = bson.GetJsonData();
+
+	logging("[future opt] send ( order ), content: %s", strJson);
+
+	bson.FreeJsonData();
+
+#endif
+
+	//logging_bson_order( (void *)&ord );
 
     return 0;
 
