@@ -9,6 +9,7 @@
 
 enum lmice_spi_type_e {
     EM_LMICE_TRACE_TYPE=1,
+	EMZ_LMICE_TRACEZ_BSON_TYPE,
     EM_LMICE_SUB_TYPE,
     EM_LMICE_UNSUB_TYPE
 };

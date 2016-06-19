@@ -64,6 +64,8 @@ public:
 	int AppendInt64( const char *key, int64_t value );
 	int AppendNull( const char *key );
 	int AppendUtf8( const char *key, const char *value );
+	int AppendSymbol( const char *key, const char *value );
+	int AppendFlag( const char *key, char value );
 	int AppendTimeT( const char *key, time_t value );
 	int AppendTimeStamp( const char *key, uint32_t timestamp, uint32_t increment );
 	int AppendNowUtc( const char *key );

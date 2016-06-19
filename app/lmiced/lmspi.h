@@ -54,7 +54,9 @@ public:
     /* order tracker */
     /* P & L tracker */
     /* position tracker */
-
+private:
+	void logging_bson_order( void *ptrOrd );
+	void logging_bson_cancel( void *ptrOrd );
 
 private:
     std::string m_name;

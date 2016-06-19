@@ -94,7 +94,27 @@ int EalBson::AppendUtf8( const char *key, const char *value )
 	}
 	return -1;
 }
-	
+
+int EalBson::AppendSymbol( const char *key, const char *value )
+{
+	if( key && value )
+	{
+		if( bson_append_symbol( m_ptr_bson, key, -1, value, -1 ) )
+			return m_ptr_bson->len;
+	}
+	return -1;
+}
+
+int EalBson::AppendFlag( const char *key, char value )
+{
+	if( key )
+	{
+		if( bson_append_symbol( m_ptr_bson, key, -1, &value, 1 ) )
+			return m_ptr_bson->len;
+	}
+	return -1;
+}
+
 int EalBson::AppendTimeT( const char *key, time_t value )
 {
 	if( key )
