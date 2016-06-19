@@ -64,12 +64,11 @@ void CLMSpi::logging_bson_order( void *ptrOrd )
 	}
 	
 	CUstpFtdcInputOrderField *ord = (CUstpFtdcInputOrderField *)ptrOrd;
-	
-    lmice_sub_t *pbson = (lmice_sub_t *)sid->data;
-    lmice_trace_info_t *pinfo = &pbson->info;
+    lmice_trace_bson_info_t *pinfo = (lmice_trace_bson_info_t *)sid->data;
 	EalBson bson;
     time(&pinfo->tm);
     get_system_time(&pinfo->systime);
+	strcpy(pinfo->model_name, m_name.c_str());
     pinfo->type = EMZ_LMICE_TRACEZ_BSON_TYPE;
 
 	bson.AppendTimeT("time", pinfo->tm);
@@ -103,15 +102,6 @@ void CLMSpi::logging_bson_order( void *ptrOrd )
     send_uds_msg(sid);
 }
 
-
-
-///ÊýÁ¿±ä»¯
-TUstpFtdcVolumeType VolumeChange;
-///±¾µØÒµÎñ±êÊ¶
-TUstpFtdcBusinessLocalIDType	BusinessLocalID;
-
-
-	
 void CLMSpi::logging_bson_cancel( void *ptrOrd )
 {
 	if( NULL == ptrOrd )
@@ -121,11 +111,10 @@ void CLMSpi::logging_bson_cancel( void *ptrOrd )
 
 	CUstpFtdcOrderActionField *ord = (CUstpFtdcOrderActionField *)ptrOrd;
 	
-    lmice_sub_t *pbson = (lmice_sub_t *)sid->data;
-    lmice_trace_info_t *pinfo = &pbson->info;
+    lmice_trace_bson_info_t *pinfo = (lmice_trace_bson_info_t *)sid->data;
 	EalBson bson;
-    time(&pinfo->tm);
     get_system_time(&pinfo->systime);
+	strcpy(pinfo->model_name, m_name.c_str());
     pinfo->type = EMZ_LMICE_TRACEZ_BSON_TYPE;
 
 	bson.AppendTimeT("time", pinfo->tm);

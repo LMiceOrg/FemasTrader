@@ -225,12 +225,12 @@ int init_epoll(int sfd) {
                     }
 					case EMZ_LMICE_TRACEZ_BSON_TYPE:
 					{
-						const lmice_trace_info_t* info = (const lmice_trace_info_t*)msg.data;
-                        const char* data = (const char*)(msg.data + sizeof(lmice_trace_info_t));
+						const lmice_trace_bson_info_t* info = (const lmice_trace_info_t*)msg.data;
+                        const char* data = (const char*)(msg.data + sizeof(lmice_trace_bson_info_t));
                         unsigned int length = 0;
 						//bson data length is default little endia
 						memcpy(&length, data, sizeof(length));
-						lmice_logging_bson(msg, info, data, length);
+						lmice_logging_bson(info, data, length);
                         break;
 					}
                     case EM_LMICE_SUB_TYPE:
