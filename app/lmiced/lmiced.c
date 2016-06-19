@@ -42,7 +42,9 @@ struct symbolnode {
 
 struct appclient {
     struct sockaddr_un addr;
-    char symbol [32];
+    unsigned short rescount;
+    lmice_event_t event;
+    char resource [32];
 
 };
 
@@ -271,7 +273,7 @@ int init_epoll(int sfd) {
                             node->next = NULL;
                             memcpy(node->symbol, psub->symbol, sizeof(node->symbol));
                             hval = eal_hash64_fnv1a((const char*)&(msg.remote_un),node->addr_len);
-                            eal_event_hash_name(hval, node->event->name);
+                            eal_event_hash_name(hval, node->event.name);
                             ret = eal_event_create(&node->event);
                             if(ret != 0) {
                                 lmice_critical_log("EAL create event[%s] failed as[%d]\n", (const char*)&(msg.remote_un), ret);

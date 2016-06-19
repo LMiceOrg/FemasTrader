@@ -51,9 +51,10 @@ public:
      */
     int cancel(int requestId, int sysId = 0);
 
-    int register_callback(const char* symbol, callback func);
+//    int register_callback(const char* symbol, callback func);
 
     /* order tracker */
+//    int get_order(const char* order_id, struct order_t * order);
     /* P & L tracker */
     /* position tracker */
 private:
