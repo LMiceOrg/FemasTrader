@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 
+#include "lmice_eal_bson.h"
+
 
 #define SOCK_FILE "/var/run/lmiced.socket"
 
@@ -50,6 +52,84 @@ void CLMSpi::logging(const char* format, ...) {
     va_start(argptr, format);
     sid->size += vsprintf(sid->data+sizeof(m_info), format, argptr);
     va_end(argptr);
+
+    send_uds_msg(sid);
+}
+
+void CLMSpi::logging_bson_order( void *ptrOrd )
+{
+	if( NULL == ptrOrd )
+	{
+		return;
+	}
+	
+	CUstpFtdcInputOrderField *ord = (CUstpFtdcInputOrderField *)ptrOrd;
+    lmice_trace_bson_info_t *pinfo = (lmice_trace_bson_info_t *)sid->data;
+	EalBson bson;
+    time(&pinfo->tm);
+    get_system_time(&pinfo->systime);
+	strcpy(pinfo->model_name, m_name.c_str());
+    pinfo->type = EMZ_LMICE_TRACEZ_BSON_TYPE;
+
+	bson.AppendTimeT("time", pinfo->tm);
+	bson.AppendSymbol("BrokerID", ord->BrokerID);
+	bson.AppendSymbol("ExchangeID", ord->ExchangeID);
+	bson.AppendSymbol("OrderSysID", ord->OrderSysID);
+	bson.AppendSymbol("InvestorID", ord->InvestorID);
+	bson.AppendSymbol("UserID", ord->UserID);
+	bson.AppendSymbol("InstrumentID", ord->InstrumentID);
+	bson.AppendSymbol("UserOrderLocalID", ord->UserOrderLocalID);
+	bson.AppendFlag("OrderPriceType", ord->OrderPriceType);
+	bson.AppendFlag("Direction", ord->Direction);
+	bson.AppendFlag("OffsetFlag", ord->OffsetFlag);
+	bson.AppendFlag("HedgeFlag", ord->HedgeFlag);
+	bson.AppendDouble("LimitPrice",ord->LimitPrice);
+	bson.AppendInt64("Volume",ord->Volume);
+	bson.AppendFlag("TimeCondition", ord->TimeCondition);
+	bson.AppendSymbol("GTDDate", ord->GTDDate);
+	bson.AppendFlag("VolumeCondition", ord->VolumeCondition);
+	bson.AppendInt64("MinVolume",ord->MinVolume);
+	bson.AppendDouble("StopPrice",ord->StopPrice);
+	bson.AppendFlag("ForceCloseReason", ord->ForceCloseReason);
+	bson.AppendInt64("MinVolume",ord->MinVolume);
+	bson.AppendInt64("IsAutoSuspend",ord->IsAutoSuspend);
+	bson.AppendSymbol("BusinessUnit", ord->BusinessUnit);
+	bson.AppendSymbol("UserCustom", ord->UserCustom);
+	bson.AppendInt64("BusinessLocalID",ord->BusinessLocalID);
+	bson.AppendSymbol("ActionDay", ord->ActionDay);
+	memcpy( sid->data+sizeof(m_info), bson.GetBsonData(), bson.GetLen());
+
+    send_uds_msg(sid);
+}
+
+void CLMSpi::logging_bson_cancel( void *ptrOrd )
+{
+	if( NULL == ptrOrd )
+	{
+		return;
+	}
+
+	CUstpFtdcOrderActionField *ord = (CUstpFtdcOrderActionField *)ptrOrd;
+	
+    lmice_trace_bson_info_t *pinfo = (lmice_trace_bson_info_t *)sid->data;
+	EalBson bson;
+    get_system_time(&pinfo->systime);
+	strcpy(pinfo->model_name, m_name.c_str());
+    pinfo->type = EMZ_LMICE_TRACEZ_BSON_TYPE;
+
+	bson.AppendTimeT("time", pinfo->tm);
+	bson.AppendSymbol("BrokerID", ord->BrokerID);
+	bson.AppendSymbol("ExchangeID", ord->ExchangeID);
+	bson.AppendSymbol("OrderSysID", ord->OrderSysID);
+	bson.AppendSymbol("InvestorID", ord->InvestorID);
+	bson.AppendSymbol("UserID", ord->UserID);
+	bson.AppendSymbol("UserOrderLocalID", ord->UserOrderLocalID);
+	bson.AppendSymbol("UserOrderActionLocalID", ord->UserOrderActionLocalID);
+	bson.AppendFlag("ActionFlag", ord->ActionFlag);
+	bson.AppendDouble("LimitPrice",ord->LimitPrice);
+	bson.AppendInt64("VolumeChange",ord->VolumeChange);
+	bson.AppendInt64("BusinessLocalID",ord->BusinessLocalID);
+	memcpy( sid->data+sizeof(m_info), bson.GetBsonData(), bson.GetLen());
 
     send_uds_msg(sid);
 }
@@ -152,6 +232,8 @@ int CLMSpi::cancel(int requestId, int sysId)
     /// 发出撤单操作
     spi->GetTrader()->ReqOrderAction(&ord, req);
 
+	logging_bson_cancel( (void *)&ord );
+
     return req;
 
 }
@@ -210,6 +292,8 @@ int CLMSpi::order(const char *symbol, int dir, double price, int num)
     TUstpFtdcBusinessLocalIDType	BusinessLocalID;
     ///业务发生日期 。交易日
     TUstpFtdcDateType	ActionDay;
+
+	logging_bson_order( (void *)&ord );
 
     return 0;
 
