@@ -51,6 +51,8 @@ public:
      */
     int cancel(int requestId, int sysId = 0);
 
+    int register_callback(const char* symbol, callback func);
+
     /* order tracker */
     /* P & L tracker */
     /* position tracker */

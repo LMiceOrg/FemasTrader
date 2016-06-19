@@ -4,6 +4,7 @@
 #include "lmice_eal_thread.h"
 #include "lmice_eal_shm.h"
 #include "lmice_eal_hash.h"
+#include "lmice_eal_event.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -34,7 +35,15 @@ struct symbolnode {
     struct sockaddr_un addr;
     socklen_t addr_len;
     char symbol[32];
+    lmice_event_t event;
     struct symbolnode* next;
+
+};
+
+struct appclient {
+    struct sockaddr_un addr;
+    char symbol [32];
+
 };
 
 struct symbolnode sublist;
@@ -140,6 +149,7 @@ int init_daemon() {
 
 
 int init_epoll(int sfd) {
+    int ret;
     int s;
     int efd;
     struct epoll_event event;
@@ -220,19 +230,19 @@ int init_epoll(int sfd) {
                     {
                         const lmice_trace_info_t* info = (const lmice_trace_info_t*)msg.data;
                         const char* data = (const char*)(msg.data + sizeof(lmice_trace_info_t));
-						lmice_logging(info, data);
+                        lmice_logging(info, data);
                         break;
                     }
-					case EMZ_LMICE_TRACEZ_BSON_TYPE:
-					{
-						const lmice_trace_bson_info_t* info = (const lmice_trace_info_t*)msg.data;
+                    case EMZ_LMICE_TRACEZ_BSON_TYPE:
+                    {
+                        const lmice_trace_bson_info_t* info = (const lmice_trace_info_t*)msg.data;
                         const char* data = (const char*)(msg.data + sizeof(lmice_trace_bson_info_t));
                         unsigned int length = 0;
-						//bson data length is default little endia
-						memcpy(&length, data, sizeof(length));
-						lmice_logging_bson(info, data, length);
+                        //bson data length is default little endia
+                        memcpy(&length, data, sizeof(length));
+                        lmice_logging_bson(info, data, length);
                         break;
-					}
+                    }
                     case EM_LMICE_SUB_TYPE:
                     {
                         const lmice_sub_t* psub = (const lmice_sub_t*)msg.data;
@@ -253,13 +263,19 @@ int init_epoll(int sfd) {
                             node = node->next;
                         }
                         if(node == NULL) {
+                            uint64_t hval=0;
                             node = (struct symbolnode*)malloc(sizeof(struct symbolnode));
                             memset(node, 0, sizeof(struct  symbolnode));
                             memcpy(&(node->addr), &(msg.remote_un), addr_len);
                             node->addr_len = addr_len;
                             node->next = NULL;
                             memcpy(node->symbol, psub->symbol, sizeof(node->symbol));
-
+                            hval = eal_hash64_fnv1a((const char*)&(msg.remote_un),node->addr_len);
+                            eal_event_hash_name(hval, node->event->name);
+                            ret = eal_event_create(&node->event);
+                            if(ret != 0) {
+                                lmice_critical_log("EAL create event[%s] failed as[%d]\n", (const char*)&(msg.remote_un), ret);
+                            }
                             parent->next = node;
                         }
 
@@ -286,6 +302,12 @@ int init_epoll(int sfd) {
 
                         break;
                     }
+                    case EM_LMICE_PUB_TYPE:
+                    {
+                        const lmice_pub_t* ppub = (const lmice_pub_t*)msg.data;
+                        const lmice_trace_info_t* info = &ppub->info;
+                        lmice_logging(info, "Publish symbol[%s]", ppub->symbol);
+                    }
                     default:
                         break;
                     }
@@ -293,7 +315,7 @@ int init_epoll(int sfd) {
                     if( LMICE_TRACE_TYPE == (int)(*msg.data) ) {
 
                     }
-//                    sendto(events[i].data.fd, msg.data, count, 0, (struct sockaddr*)&(msg.remote_un), addr_len);
+                    //                    sendto(events[i].data.fd, msg.data, count, 0, (struct sockaddr*)&(msg.remote_un), addr_len);
                 }
             }
         } /*end-for:n */

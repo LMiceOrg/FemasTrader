@@ -17,10 +17,12 @@
 
 CLMSpi::CLMSpi(const char *name)
 {
+    ///设置模型名称
     m_name = name;
+
+    ///UnixDomain socket
     create_uds_msg((void**)&sid);
     init_uds_client(SOCK_FILE, sid);
-    logging("LMice %s running %d:%d", m_name.c_str(), getuid(), getpid());
     memset(&m_info, 0, sizeof(m_info));
     m_info.pid = getpid();
     m_info.tid = eal_gettid();
@@ -29,8 +31,12 @@ CLMSpi::CLMSpi(const char *name)
     pinfo->loglevel=0;
     pinfo->pid = m_info.pid;
     pinfo->tid = m_info.tid;
-    time(&pinfo->tm);
-    get_system_time(&pinfo->systime);
+//    time(&pinfo->tm);
+//    get_system_time(&pinfo->systime);
+
+    logging("LMice client[ %s ] running %d:%d", m_name.c_str(), getuid(), getpid());
+
+
 
 }
 

@@ -29,6 +29,7 @@ public:
 public:
 	//get json string of this bson obj
 	const char *GetJsonData();
+	void FreeJsonData();
 
 	//get bson data buf
 	const uint8_t *GetBsonData()
@@ -76,6 +77,7 @@ public:
 	
 private:
 	bson_t *m_ptr_bson;
+	char * m_strJson;
 };
 
 #endif // LMIC_EAL_BSON_H

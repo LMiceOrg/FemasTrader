@@ -13,6 +13,7 @@
 
 
 #include "lmice_trace.h"
+#include "lmice_eal_event.h"
 
 #include "udss.h"
 

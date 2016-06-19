@@ -11,7 +11,9 @@ enum lmice_spi_type_e {
     EM_LMICE_TRACE_TYPE=1,
 	EMZ_LMICE_TRACEZ_BSON_TYPE,
     EM_LMICE_SUB_TYPE,
-    EM_LMICE_UNSUB_TYPE
+    EM_LMICE_UNSUB_TYPE,
+    EM_LMICE_PUB_TYPE,
+    EM_LMICE_UNPUB_TYPE
 };
 
 typedef  struct {
@@ -21,6 +23,9 @@ typedef  struct {
 
 typedef lmice_sub_t lmice_unsub_t;
 
+typedef lmice_sub_t lmice_pub_t;
+
+typedef lmice_pub_t lmice_unpub_t;
 
 
 struct uds_msg {
