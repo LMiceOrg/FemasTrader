@@ -33,18 +33,23 @@ volatile int g_quit_flag = 0;
 
 enum symbol_client_e{
     SYMBOL_LENGTH=32,
+    CLIENT_BOARD = 4*1024,  /* 4KB */
     CLIENT_COUNT = 64,
     SYMBOL_SHMSIZE = 8*1024*1024, /* 8MB */
+    CLIENT_SUBPOS = 1024,
+    CLIENT_SUBCNT = 16,
 };
 
 /** sub list */
 struct client_s {
     int64_t lock;
     lmice_event_t event;
+    lmice_shm_t board;
     struct sockaddr_un addr;
     socklen_t addr_len;
     unsigned short count;
     lmice_shm_t resshm[16];
+
 };
 typedef struct client_s client_t;
 
@@ -100,7 +105,20 @@ forceinline int append_client(server_t* cur, client_t** client) {
     return -1;
 }
 
-forceinline int init_event(client_t* client, struct sockaddr_un *addr, socklen_t addr_len) {
+forceinline int init_board(client_t* client, struct sockaddr_un *addr, socklen_t addr_len) {
+    int ret;
+    uint64_t hval;
+    hval = eal_hash64_fnv1a(addr, addr_len);
+    eal_shm_hash_name(hval, client->board.name);
+    client->board.size = CLIENT_BOARD;
+    ret = eal_shm_create(&client->board);
+    if(ret != 0) {
+        lmice_error_log("EAL create board[%s] failed as[%d]\n", addr->sun_path, ret);
+    }
+    return ret;
+}
+
+forceinline int init_client(client_t* client, struct sockaddr_un *addr, socklen_t addr_len) {
     int ret;
     uint64_t hval;
     memcpy(&client->addr, addr, addr_len);
@@ -113,6 +131,7 @@ forceinline int init_event(client_t* client, struct sockaddr_un *addr, socklen_t
     if(ret != 0) {
         lmice_error_log("EAL create event[%s] failed as[%d]\n", addr->sun_path, ret);
     }
+    ret |= init_board(client, addr, addr_len);
     return ret;
 }
 
@@ -203,7 +222,7 @@ forceinline int removeall_symbol(client_t* client) {
         if(ret != 0) {  \
             lmice_error_log("Create client failed[%d]\n", ret);  \
         } else {                                                \
-            init_event(cli, &msg.remote_un, addr_len);          \
+            init_client(cli, &msg.remote_un, addr_len);          \
         }                                                       \
     }                                                           \
     /* Append symbol */ \
@@ -463,6 +482,75 @@ int init_epoll(int sfd) {
                         CLI_REMOVESYMBOL(ser, cli, msg, pb->symbol, strlen(pb->symbol));
 
                         break;
+
+                    }
+                    case EM_LMICE_SEND_DATA:
+                    {
+                        /** Send data from publisher */
+                        server_t *ser = &publist;
+                        client_t *cli = NULL;
+                        const lmice_send_data_t* pb = (const lmice_send_data_t*)msg.data;
+                        const lmice_trace_info_t* info = &pb->info;
+                        int ret =0;
+                        size_t i;
+                        lmice_shm_t *shm;
+                        uint64_t hval;
+                        char name[32] ={0};
+                        GET_SHMNAME(pb->symbol, strlen(pb->symbol), hval, name);
+
+                        /* Find pub client */
+                        ret = find_client(ser, &msg.remote_un, &cli);
+                        if(ret != 0) {
+                            break;
+                        }
+
+                        /* Update pub data */
+                        ret = 1;
+                        for(i=0; i<cli->count; ++i) {
+                            shm = &cli->resshm[i];
+                            if(memcmp(shm->name, name, 32) == 0) {
+                                memcpy(shm->addr, pb->data, pb->size);
+                                ret = 0;
+                                break;
+                            }
+                        }
+                        /* Awake subs */
+                        if(ret == 0)
+                        {
+                            /* Loop sub:clients */
+                            server_t *cur = &sublist;
+                            size_t j;
+                            do {
+                                for(i=0; i<cur->count; ++i) {
+                                    client_t* cli = cur->clients[i];
+                                    if(cli == NULL)
+                                        continue;
+                                    for(j=0; j<cli->count; ++j) {
+                                        shm = &cli->resshm[j];
+                                        if(memcmp(shm->name, name, 32) == 0) {
+                                            /* Add */
+                                            sub_data_t* dt = (sub_data_t*)((char*)cli->board.addr + CLIENT_SUBPOS);
+                                            eal_spin_lock(&dt->lock);
+                                            if(dt->count<CLIENT_SUBCNT) {
+                                                char* sym = dt->symbol+SYMBOL_LENGTH*dt->count;
+                                                memcpy(sym, pb->symbol, SYMBOL_LENGTH);
+                                                ++dt->count;
+                                            }
+                                            eal_spin_unlock(&dt->lock);
+
+                                            /* Awake */
+                                            eal_event_awake(cli->event.fd);
+
+                                            break; /* break-for: cli->count */
+                                        }
+                                    }
+                                }
+                                cur = cur->next;
+                            } while(cur != NULL);
+                        }
+                        lmice_logging(info, "Send data symbol[%s], size[%u]", pb->symbol, pb->size);
+
+
 
                     }
                     default:

@@ -13,7 +13,8 @@ enum lmice_spi_type_e {
     EM_LMICE_SUB_TYPE,
     EM_LMICE_UNSUB_TYPE,
     EM_LMICE_PUB_TYPE,
-    EM_LMICE_UNPUB_TYPE
+    EM_LMICE_UNPUB_TYPE,
+    EM_LMICE_SEND_DATA
 };
 
 typedef  struct {
@@ -27,6 +28,18 @@ typedef lmice_sub_t lmice_pub_t;
 
 typedef lmice_pub_t lmice_unpub_t;
 
+typedef struct {
+    lmice_trace_info_t info;
+    char symbol[32];
+    uint32_t size;
+    char data[512];
+} lmice_send_data_t;
+
+typedef struct {
+    int64_t lock;
+    uint32_t count;
+    char symbol[32];
+} sub_data_t;
 
 struct uds_msg {
     int sock;
