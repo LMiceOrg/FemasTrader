@@ -7,6 +7,18 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+enum symbol_client_e{
+    CLIENT_SUBSYM = 1,
+    CLIENT_PUBSYM = 0,
+    SYMBOL_LENGTH=32,
+    CLIENT_BOARD = 4*1024,  /* 8KB */
+    CLIENT_COUNT = 64,
+    SYMBOL_SHMSIZE = 8*1024*1024, /* 8MB */
+    CLIENT_SUBPOS = 1024,
+    CLIENT_SPCNT = 256,
+    MAINTAIN_PERIOD = 30
+};
+
 enum lmice_spi_type_e {
     EM_LMICE_TRACE_TYPE=1,
 	EMZ_LMICE_TRACEZ_BSON_TYPE,
@@ -14,7 +26,8 @@ enum lmice_spi_type_e {
     EM_LMICE_UNSUB_TYPE,
     EM_LMICE_PUB_TYPE,
     EM_LMICE_UNPUB_TYPE,
-    EM_LMICE_SEND_DATA
+    EM_LMICE_SEND_DATA,
+    EM_LMICE_REGCLIENT_TYPE,
 };
 
 typedef  struct {

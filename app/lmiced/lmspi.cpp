@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <signal.h>
 
 #include <iconv.h>
 #include <unistd.h>
@@ -12,10 +13,34 @@
 
 #include "lmice_eal_bson.h"
 
+#include "lmice_eal_shm.h"
+#include "lmice_eal_event.h"
+#include "lmice_eal_hash.h"
+
+struct spi_private {
+    pthread_t pt;
+    volatile int quit_flag;
+    lmice_event_t event;
+    lmice_shm_t board;
+    lmice_shm_t shmlist[256];
+
+
+};
 
 #define SOCK_FILE "/var/run/lmiced.socket"
 
 #define OPT_LOG_DEBUG 1
+
+volatile int quit_flag = 0;
+
+void spi_signal_handler(int sig) {
+    if(sig == SIGTERM || sig == SIGINT)
+        quit_flag = 1;
+}
+
+void* spi_thread(void* priv) {
+    spi_private* p = (spi_private*) priv;
+}
 
 CLMSpi::CLMSpi(const char *name)
 {
@@ -30,12 +55,41 @@ CLMSpi::CLMSpi(const char *name)
     pinfo->loglevel=0;
     pinfo->pid = m_info.pid;
     pinfo->tid = m_info.tid;
-//    time(&pinfo->tm);
-//    get_system_time(&pinfo->systime);
+    time(&pinfo->tm);
+    get_system_time(&pinfo->systime);
+
+    // Register signal handler
+    signal(SIGINT, spi_signal_handler);
+    /*signal(SIGCHLD,SIG_IGN);  ignore child */
+    /* signal(SIGTSTP,SIG_IGN);  ignore tty signals */
+    signal(SIGTERM,spi_signal_handler); /* catch kill signal */
+
+    //Register client
+    pinfo->type = EM_LMICE_REGCLIENT_TYPE;
+    sid->size = sizeof(lmice_trace_info_t);
+    int ret = send_uds_msg(sid);
+    if(ret == sid->size ) {
+        struct sockaddr_un addr;
+        socklen_t addr_len;
+        lmice_critical_print("Register model[%s] ...\n", name);
+        sid->size = recvfrom(sid->sock, sid->data, sizeof sid->data, 0, (struct sockaddr*)&(addr), &addr_len);
+        lmice_critical_print("Registered model[%s] as [%d]\n", name, *(int*)sid->data);
+    }
 
     logging("LMice client[ %s ] running %d:%d", m_name.c_str(), getuid(), getpid());
 
+    // create thread
+    spi_private* p = new spi_private;
+    uint64_t hval;
+    hval = eal_hash64_fnv1a(sid->local_un.sun_path, strlen(sid->local_un.sun_path));
+    eal_shm_hash_name(hval, p->board.name);
+    eal_shm_open_readwrite(&p->board);
 
+    eal_event_hash_name(hval, p->event.name);
+    eal_event_open(&p->event);
+    memset(p, 0, sizeof(spi_private));
+    m_priv = (void*) p;
+    pthread_create(&p->pt, NULL, spi_thread, m_priv);
 
 }
 

@@ -35,6 +35,10 @@ struct lmice_event_s
 
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct lmice_event_s lmice_event_t;
 
 int eal_event_zero(lmice_event_t* e);
@@ -49,6 +53,10 @@ int eal_event_hash_name(uint64_t hval, char *name);
 
 int eal_event_wait_one(evtfd_t fd);
 int eal_event_wait_timed(evtfd_t fd, int millisec);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /** LMICE_EAL_EVENT_H */
 
