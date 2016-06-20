@@ -46,6 +46,8 @@ LIST(APPEND eal_SRCS  eal/lmice_ring.c
     eal/lmice_eal_aio.c
     eal/lmice_eal_thread.c
     eal/lmice_bloomfilter.c
+    eal/lmice_udss.c
+    eal/lmice_eal_log.cpp
     eal/lmice_eal_bson.cpp )
 
 #Shared EAL Library

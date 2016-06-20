@@ -1,6 +1,8 @@
 #pragma once
 #include <vector>
 #include "socket_multicast.h"
+#include "lmice_eal_log.h"
+#include "lmice_eal_bson.h"
 
 using std::vector;
 
@@ -85,6 +87,7 @@ public:
 private:
 	/// \brief 组播数据接收回调接口
 	virtual void on_receive_message(int id, const char* buff, unsigned int len);
+	virtual void message_log(int type, void *msg);
 
 
 private:
@@ -94,5 +97,6 @@ private:
 	int						m_cffex_id;			///< 中金所行情通道
 
 	guava_quote_event*		m_ptr_event;		///< 行情回调事件接口
+	EalLog                  m_logging;          /// log obj
 };
 
