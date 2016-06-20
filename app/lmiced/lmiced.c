@@ -5,6 +5,7 @@
 #include "lmice_eal_shm.h"
 #include "lmice_eal_hash.h"
 #include "lmice_eal_event.h"
+#include "lmice_eal_spinlock.h"
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -30,26 +31,194 @@ volatile int g_quit_flag = 0;
 
 #define MAXEVENTS 64
 
+enum symbol_client_e{
+    SYMBOL_LENGTH=32,
+    CLIENT_COUNT = 64,
+    SYMBOL_SHMSIZE = 8*1024*1024, /* 8MB */
+};
+
 /** sub list */
-struct symbolnode {
+struct client_s {
+    int64_t lock;
+    lmice_event_t event;
     struct sockaddr_un addr;
     socklen_t addr_len;
-    char symbol[32];
+    unsigned short count;
+    lmice_shm_t resshm[16];
+};
+typedef struct client_s client_t;
+
+struct symbolnode {
+    int64_t lock;
+    struct sockaddr_un addr;
+    unsigned short count;
+    client_t *clients[CLIENT_COUNT];
+    char symbol[SYMBOL_LENGTH];
     lmice_event_t event;
     struct symbolnode* next;
 
 };
+typedef struct symbolnode server_t;
 
-struct appclient {
-    struct sockaddr_un addr;
-    unsigned short rescount;
-    lmice_event_t event;
-    char resource [32];
 
-};
+/** Global publish/subscribe list */
+server_t sublist;
+server_t publist;
 
-struct symbolnode sublist;
-struct symbolnode publist;
+forceinline int find_client(server_t* cur, struct sockaddr_un* addr, client_t** client) {
+    size_t i;
+    do {
+        for(i=0; i<cur->count; ++i) {
+            client_t* cli = cur->clients[i];
+            if( memcmp(&cli->addr, addr, cli->addr_len) == 0) {
+                *client = cli;
+                return 0;
+            }
+        }
+        cur = cur->next;
+    } while(cur != NULL);
+    *client = NULL;
+    return -1;
+}
+
+forceinline int append_client(server_t* cur, client_t** client) {
+    do {
+        if(cur->count < CLIENT_COUNT) {
+            client_t* cli = (client_t*)malloc(sizeof(client_t));
+            cur->clients[cur->count] = cli;
+            cur->count ++;
+            *client = cli;
+            return 0;
+        } else {
+            server_t* ser = (server_t*)malloc(sizeof(server_t));
+            memset(ser, 0, sizeof(server_t));
+            cur->next = ser;
+        }
+        cur = cur->next;
+    } while(cur != NULL);
+    *client = NULL;
+    return -1;
+}
+
+forceinline int init_event(client_t* client, struct sockaddr_un *addr, socklen_t addr_len) {
+    int ret;
+    uint64_t hval;
+    memcpy(&client->addr, addr, addr_len);
+    client->addr_len = addr_len;
+    client->count = 0;
+    client->lock = 0;
+    hval = eal_hash64_fnv1a(addr, addr_len);
+    eal_event_hash_name(hval, client->event.name);
+    ret = eal_event_create(&client->event);
+    if(ret != 0) {
+        lmice_error_log("EAL create event[%s] failed as[%d]\n", addr->sun_path, ret);
+    }
+    return ret;
+}
+
+#define GET_SHMNAME(symbol, sym_len, hval, name) do {  \
+    hval = eal_hash64_fnv1a(symbol, sym_len);   \
+    eal_shm_hash_name(hval, name);  \
+    } while(0)
+
+forceinline int append_symbol(client_t* client, const char* symbol, size_t sym_len) {
+    int ret = 1;
+    size_t i;
+    uint64_t hval = 0;
+    char name[32] = {0};
+    GET_SHMNAME(symbol, sym_len, hval, name);
+
+    for(i=0; i< client->count; ++i) {
+        lmice_shm_t* shm = &client->resshm[i];
+        if(memcmp(shm->name, name, 32) == 0) {
+            /* Already appended! */
+            lmice_critical_log("Client[%s] already append the symbol[%s]\n", client->addr.sun_path, symbol);
+            ret = 0;
+            break;
+        }
+    }
+    if(ret == 1) {
+        /* Find nothing, so create new symbol */
+        if(client->count < SYMBOL_LENGTH) {
+            lmice_shm_t* shm = &client->resshm[client->count];
+            ++client->count;
+            eal_shm_zero(&shm);
+            eal_shm_hash_name(hval, shm->name);
+            shm->size = SYMBOL_SHMSIZE;
+            ret = eal_shm_create_or_open(shm);
+            if(ret != 0) {
+                lmice_error_log("Create shm[%s] failed as [%d].", name, ret);
+            }
+        } else {
+            lmice_error_log("Client[%s] symbol list is full, can't append symbol[%s]\n", client->addr.sun_path, symbol);
+        }
+    }
+    return ret;
+}
+
+forceinline int remove_symbol(client_t *client, const char* symbol, size_t sym_len) {
+    int ret;
+    size_t i;
+    uint64_t hval = 0;
+    char name[32] = {0};
+    GET_SHMNAME(symbol, sym_len, hval, name);
+    for(i=0; i<client->count; ++i) {
+        lmice_shm_t* shm = &client->resshm[client->count];
+        if(memcmp(shm->name, name, 32) == 0) {
+            ret = eal_shm_destroy(shm);
+            if(ret != 0) {
+                lmice_error_log("remove shm[%s] failed as [%d].", shm->name, ret);
+            }
+            memmove(shm, shm+1, (client->count-i-1)*sizeof(lmice_shm_t) );
+            --client->count;
+            ret = 0;
+            break;
+        }
+    }
+
+    return ret;
+}
+
+forceinline int removeall_symbol(client_t* client) {
+    int ret = 0;
+    size_t i;
+    for(i=0; i<client->count; ++i) {
+        lmice_shm_t* shm = &client->resshm[client->count];
+        ret = eal_shm_destroy(shm);
+        if(ret != 0) {
+            lmice_error_log("remove shm[%s] failed as [%d].", shm->name, ret);
+        }
+    }
+    client->count = 0;
+    return ret;
+}
+
+#define CLI_APPENDSYMBOL(ser,cli, msg, addr_len, sym, sym_len) do { \
+    int ret = 0;    \
+    /* Find or create client */ \
+    ret = find_client(ser, &msg.remote_un, &cli);   \
+    if(ret != 0) {  \
+        /* Don't found, so append new client */ \
+        ret = append_client(ser, &cli); \
+        if(ret != 0) {  \
+            lmice_error_log("Create client failed[%d]\n", ret);  \
+        } else {                                                \
+            init_event(cli, &msg.remote_un, addr_len);          \
+        }                                                       \
+    }                                                           \
+    /* Append symbol */ \
+    append_symbol(cli, sym, sym_len); \
+    } while(0)
+
+#define CLI_REMOVESYMBOL(ser, cli, msg, sym, sym_len) do{  \
+    int ret =0; \
+    /* Find client */   \
+    ret = find_client(ser, &msg.remote_un, &cli);   \
+    if(ret == 0) {  \
+        /* Remove symbol */ \
+        remove_symbol(cli, sym, sym_len); \
+    }   \
+    } while(0)
 
 static int init_daemon();
 int init_epoll(int sfd);
@@ -212,7 +381,7 @@ int init_epoll(int sfd) {
                      completely, as we are running in edge-triggered mode
                      and won't get a notification again for the same
                      data. */
-
+                int ret;
                 ssize_t count;
                 uds_msg msg = {0};
                 socklen_t addr_len=sizeof(msg.remote_un);
@@ -239,76 +408,62 @@ int init_epoll(int sfd) {
                     {
                         const lmice_trace_bson_info_t* info = (const lmice_trace_info_t*)msg.data;
                         const char* data = (const char*)(msg.data + sizeof(lmice_trace_bson_info_t));
-                        unsigned int length = 0;
+                        unsigned int length = *(const unsigned int*)data;
                         //bson data length is default little endia
-                        memcpy(&length, data, sizeof(length));
+                        //memcpy(&length, data, sizeof(length));
                         lmice_logging_bson(info, data, length);
                         break;
                     }
                     case EM_LMICE_SUB_TYPE:
                     {
-                        const lmice_sub_t* psub = (const lmice_sub_t*)msg.data;
-                        const lmice_trace_info_t* info = &psub->info;
-                        lmice_logging(info, "Subscribe symbol[%s]", psub->symbol);
-                        struct symbolnode* parent = &sublist;
-                        struct symbolnode* node = sublist.next;
+                        server_t *ser = &sublist;
+                        client_t* cli = NULL;
+                        const lmice_sub_t* pb = (const lmice_sub_t*)msg.data;
+                        const lmice_trace_info_t* info = &pb->info;
+                        lmice_logging(info, "Subscribe symbol[%s]", pb->symbol);
 
-                        while(node!=NULL) {
-                            if(memcmp(&(node->addr), &(msg.remote_un),node->addr_len) == 0
-                                    && strcmp(node->symbol, psub->symbol) == 0) {
-                                lmice_info_log("Symbol[%s] already subscribed by client %s"
-                                               , node->symbol
-                                               , msg.remote_un.sun_path);
-                                break;
-                            }
-                            parent = node;
-                            node = node->next;
-                        }
-                        if(node == NULL) {
-                            uint64_t hval=0;
-                            node = (struct symbolnode*)malloc(sizeof(struct symbolnode));
-                            memset(node, 0, sizeof(struct  symbolnode));
-                            memcpy(&(node->addr), &(msg.remote_un), addr_len);
-                            node->addr_len = addr_len;
-                            node->next = NULL;
-                            memcpy(node->symbol, psub->symbol, sizeof(node->symbol));
-                            hval = eal_hash64_fnv1a((const char*)&(msg.remote_un),node->addr_len);
-                            eal_event_hash_name(hval, node->event.name);
-                            ret = eal_event_create(&node->event);
-                            if(ret != 0) {
-                                lmice_critical_log("EAL create event[%s] failed as[%d]\n", (const char*)&(msg.remote_un), ret);
-                            }
-                            parent->next = node;
-                        }
+                        CLI_APPENDSYMBOL(ser,cli, msg, addr_len, pb->symbol, strlen(pb->symbol));
+
 
                         break;
 
                     }
                     case EM_LMICE_UNSUB_TYPE:
                     {
-                        const lmice_unsub_t* psub = (const lmice_unsub_t*)msg.data;
-                        const lmice_trace_info_t* info = &psub->info;
-                        lmice_logging(info, "Unsubscribe symbol[%s]", psub->symbol);
-                        struct symbolnode* parent = &sublist;
-                        struct symbolnode* node = sublist.next;
-                        do {
-                            if(memcmp(&(node->addr), &(msg.remote_un),node->addr_len) == 0
-                                    && strcmp(node->symbol, psub->symbol) == 0) {
-                                parent->next = node->next;
-                                free(node);
-                                break;
-                            }
-                            parent = node;
-                            node = node->next;
-                        } while(node != NULL);
+                        server_t* ser = &sublist;
+                        client_t* cli = NULL;
+                        const lmice_unsub_t* pb = (const lmice_unsub_t*)msg.data;
+                        const lmice_trace_info_t* info = &pb->info;
+                        lmice_logging(info, "Unsubscribe symbol[%s]", pb->symbol);
+
+                        CLI_REMOVESYMBOL(ser, cli, msg, pb->symbol, strlen(pb->symbol));
 
                         break;
                     }
                     case EM_LMICE_PUB_TYPE:
                     {
-                        const lmice_pub_t* ppub = (const lmice_pub_t*)msg.data;
-                        const lmice_trace_info_t* info = &ppub->info;
-                        lmice_logging(info, "Publish symbol[%s]", ppub->symbol);
+                        server_t* ser = &publist;
+                        client_t* cli = NULL;
+                        const lmice_pub_t* pb = (const lmice_pub_t*)msg.data;
+                        const lmice_trace_info_t* info = &pb->info;
+                        lmice_logging(info, "Publish symbol[%s]", pb->symbol);
+
+                        CLI_APPENDSYMBOL(ser,cli, msg, addr_len, pb->symbol, strlen(pb->symbol));
+
+                        break;
+                    }
+                    case EM_LMICE_UNPUB_TYPE:
+                    {
+                        server_t* ser = &publist;
+                        client_t* cli = NULL;
+                        const lmice_pub_t* pb = (const lmice_pub_t*)msg.data;
+                        const lmice_trace_info_t* info = &pb->info;
+                        lmice_logging(info, "Publish symbol[%s]", pb->symbol);
+
+                        CLI_REMOVESYMBOL(ser, cli, msg, pb->symbol, strlen(pb->symbol));
+
+                        break;
+
                     }
                     default:
                         break;
