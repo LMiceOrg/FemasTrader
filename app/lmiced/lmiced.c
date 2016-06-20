@@ -32,10 +32,7 @@ volatile int g_quit_flag = 0;
 #define MAXEVENTS 64
 
 
-typedef struct lmice_pubsub_shm_s{
-    lmice_shm_t shm;
-    int type;
-}lmice_pubsub_shm_t;
+
 
 /** sub list */
 struct client_s {
@@ -47,22 +44,24 @@ struct client_s {
     struct sockaddr_un addr;
     socklen_t addr_len;
     unsigned short count;
-    lmice_pubsub_shm_t resshm[CLIENT_SPCNT];
+    pubsub_shm_t resshm[CLIENT_SPCNT];
 
 };
 typedef struct client_s client_t;
 
-struct symbolnode {
+
+
+struct server_s {
     int64_t lock;
 //    struct sockaddr_un addr;
-    unsigned short count;
+    uint32_t count;
     client_t *clients[CLIENT_COUNT];
 //    char symbol[SYMBOL_LENGTH];
 //    lmice_event_t event;
-    struct symbolnode* next;
+    struct server_s* next;
 
 };
-typedef struct symbolnode server_t;
+typedef struct server_s server_t;
 
 
 /** Global publish/subscribe client list */
@@ -117,7 +116,7 @@ forceinline int init_board(client_t* client, struct sockaddr_un *addr, socklen_t
     return ret;
 }
 
-forceinline int init_client(client_t* client, lmice_trace_info_t* info, struct sockaddr_un *addr, socklen_t addr_len) {
+forceinline int init_client(client_t* client, const lmice_trace_info_t* info, struct sockaddr_un *addr, socklen_t addr_len) {
     int ret;
     uint64_t hval;
     memcpy(&client->addr, addr, addr_len);
@@ -151,7 +150,7 @@ forceinline int append_symbol(client_t* client, const char* symbol, size_t sym_l
     GET_SHMNAME(symbol, sym_len, hval, name);
 
     for(i=0; i< client->count; ++i) {
-        lmice_pubsub_shm_t* ps = &client->resshm[i];
+        pubsub_shm_t* ps = &client->resshm[i];
         lmice_shm_t* shm = &ps->shm;
         if(memcmp(shm->name, name, 32) == 0 && ps->type == type) {
             /* Already appended! */
@@ -163,11 +162,11 @@ forceinline int append_symbol(client_t* client, const char* symbol, size_t sym_l
     if(ret == 1) {
         /* Find nothing, so create new symbol */
         if(client->count < SYMBOL_LENGTH) {
-            lmice_pubsub_shm_t* ps = &client->resshm[client->count];
+            pubsub_shm_t* ps = &client->resshm[client->count];
             lmice_shm_t* shm = &ps->shm;
             ps->type = type;
             ++client->count;
-            eal_shm_zero(&shm);
+            eal_shm_zero(shm);
             eal_shm_hash_name(hval, shm->name);
             shm->size = SYMBOL_SHMSIZE;
             ret = eal_shm_create_or_open(shm);
@@ -188,14 +187,14 @@ forceinline int remove_symbol(client_t *client, const char* symbol, size_t sym_l
     char name[32] = {0};
     GET_SHMNAME(symbol, sym_len, hval, name);
     for(i=0; i<client->count; ++i) {
-        lmice_pubsub_shm_t* ps = &client->resshm[i];
+        pubsub_shm_t* ps = &client->resshm[i];
         lmice_shm_t* shm = &ps->shm;
         if(memcmp(shm->name, name, 32) == 0 && ps->type == type) {
             ret = eal_shm_destroy(shm);
             if(ret != 0) {
                 lmice_error_log("remove symbol[%s] [%d] failed as [%d].", shm->name, ps->type, ret);
             }
-            memmove(ps, ps+1, (client->count-i-1)*sizeof(lmice_pubsub_shm_t) );
+            memmove(ps, ps+1, (client->count-i-1)*sizeof(pubsub_shm_t) );
             --client->count;
             ret = 0;
             break;
@@ -209,7 +208,7 @@ forceinline int removeall_symbol(client_t* client) {
     int ret = 0;
     size_t i;
     for(i=0; i<client->count; ++i) {
-        lmice_pubsub_shm_t* ps = &client->resshm[i];
+        pubsub_shm_t* ps = &client->resshm[i];
         lmice_shm_t* shm = &ps->shm;
         ret = eal_shm_destroy(shm);
         if(ret != 0) {
@@ -330,7 +329,7 @@ int main(int argc, char* argv[]) {
 
     lmice_info_log("LMice server running.");
 
-    create_uds_msg(&pmsg);
+    create_uds_msg((void**)&pmsg);
     init_uds_server(SOCK_FILE, pmsg);
 
     /* init pub/sub list */
@@ -354,6 +353,7 @@ int init_daemon() {
     struct flock lock;
     eal_pid_t pid;
     char buf[32] = {0};
+    ssize_t sz;
 
     if( daemon(0, 1) != 0) {
         return -2;
@@ -376,7 +376,10 @@ int init_daemon() {
 
     pid = getpid();
     sprintf(buf, "%d\n", pid);
-    write(fd, buf, strlen(buf));
+    sz = write(fd, buf, strlen(buf));
+    if(sz != strlen(buf)) {
+        return -1;
+    }
 
     return fd;
 }
@@ -470,7 +473,7 @@ int init_epoll(int sfd) {
                     }
                     case EMZ_LMICE_TRACEZ_BSON_TYPE:
                     {
-                        const lmice_trace_bson_info_t* info = (const lmice_trace_info_t*)msg.data;
+                        const lmice_trace_bson_info_t* info = (const lmice_trace_bson_info_t*)msg.data;
                         const char* data = (const char*)(msg.data + sizeof(lmice_trace_bson_info_t));
                         unsigned int length = *(const unsigned int*)data;
                         //bson data length is default little endia
@@ -577,7 +580,7 @@ int init_epoll(int sfd) {
                         /* Update pub data */
                         ret = 1;
                         for(i=0; i<cli->count; ++i) {
-                            lmice_pubsub_shm_t* ps = &cli->resshm[i];
+                            pubsub_shm_t* ps = &cli->resshm[i];
                             shm = &ps->shm;
                             if(memcmp(shm->name, name, SYMBOL_LENGTH) == 0 && ps->type == CLIENT_PUBSYM) {
                                 memcpy(shm->addr, pb->data, pb->size);
@@ -597,7 +600,7 @@ int init_epoll(int sfd) {
                                     if(cli == NULL)
                                         continue;
                                     for(j=0; j<cli->count; ++j) {
-                                        lmice_pubsub_shm_t* ps = &cli->resshm[i];
+                                        pubsub_shm_t* ps = &cli->resshm[i];
                                         shm = &ps->shm;
                                         if(memcmp(shm->name, name, SYMBOL_LENGTH) == 0 &&
                                                 ps->type == CLIENT_SUBSYM) {
@@ -608,6 +611,8 @@ int init_epoll(int sfd) {
                                                 char* sym = dt->symbol+SYMBOL_LENGTH*dt->count;
                                                 memcpy(sym, pb->symbol, SYMBOL_LENGTH);
                                                 ++dt->count;
+                                            } else if(dt->count > CLIENT_SPCNT) {
+                                                dt->count = 0;
                                             }
                                             eal_spin_unlock(&dt->lock);
 
@@ -704,7 +709,7 @@ int write_msg(const char* msg, int size) {
     char fname[64]={0};
     struct guava_udp_head* ph;
     if(size != sizeof(struct guava_udp_head) + sizeof(struct guava_udp_normal)) {
-        lmice_error_log("Message size(%d) wrong, perfer(%u).", size,
+        lmice_error_log("Message size(%d) wrong, perfer(%lu).", size,
                         sizeof(struct guava_udp_head) + sizeof(struct guava_udp_normal));
         return -1;
     }

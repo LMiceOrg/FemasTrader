@@ -14,7 +14,10 @@ int main(int argc, char* argv[]) {
     lmice_sub_t*psub;
     lmice_trace_info_t *info;
     uds_msg* pmsg;
-    create_uds_msg(&pmsg);
+    int64_t a=121;
+    printf("%012lx\n",a);
+    return 1;
+    create_uds_msg((void**)&pmsg);
 
     ret = init_uds_client(SOCK_FILE, pmsg);
     lmice_critical_print("Init socket local %d\n", pmsg->sock);
@@ -23,7 +26,7 @@ int main(int argc, char* argv[]) {
     {
         int64_t tm;
         get_system_time(&tm);
-        lmice_warning_print("Time:%lld\n", tm);
+        lmice_warning_print("Time:%ld\n", tm);
     }
     psub = (lmice_sub_t*)pmsg->data;
     info = &(psub->info);
@@ -59,7 +62,7 @@ int main(int argc, char* argv[]) {
     {
         int64_t tm;
         get_system_time(&tm);
-        lmice_warning_print("Time:%lld\n", tm);
+        lmice_warning_print("Time:%ld\n", tm);
     }
 
     return 0;

@@ -1,15 +1,18 @@
 #ifndef UDSS_H
 #define UDSS_H
 
+#include "lmshm.h"
+
 #include "lmice_trace.h"
+#include "lmice_eal_shm.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
 enum symbol_client_e{
-    CLIENT_SUBSYM = 1,
-    CLIENT_PUBSYM = 0,
+    CLIENT_SUBSYM = 2,
+    CLIENT_PUBSYM = 4,
     SYMBOL_LENGTH=32,
     CLIENT_BOARD = 4*1024,  /* 8KB */
     CLIENT_COUNT = 64,
@@ -43,7 +46,7 @@ typedef lmice_pub_t lmice_unpub_t;
 
 typedef struct {
     lmice_trace_info_t info;
-    char symbol[32];
+    char symbol[SYMBOL_LENGTH];
     uint32_t size;
     char data[512];
 } lmice_send_data_t;
@@ -51,8 +54,9 @@ typedef struct {
 typedef struct {
     int64_t lock;
     uint32_t count;
-    char symbol[32];
+    char symbol[SYMBOL_LENGTH];
 } sub_data_t;
+
 
 struct uds_msg {
     int sock;
