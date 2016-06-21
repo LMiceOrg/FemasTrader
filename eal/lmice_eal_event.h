@@ -54,6 +54,7 @@ int eal_event_hash_name(uint64_t hval, char *name);
 int eal_event_wait_one(evtfd_t fd);
 int eal_event_wait_timed(evtfd_t fd, int millisec);
 
+int eal_event_init(evtfd_t fd);
 #ifdef __cplusplus
 }
 #endif

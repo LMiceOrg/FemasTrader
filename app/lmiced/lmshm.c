@@ -30,6 +30,7 @@ int lm_shmlist_delete(shmlist_t *sl)
         next = cur->next;
         free(cur);
     } while(next != NULL);
+    return 0;
 }
 
 

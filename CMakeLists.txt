@@ -118,3 +118,21 @@ app/femasmd/USTPMDHandler.cpp
 add_executable(femasmd ${fmmd_SRC})
 target_link_libraries(femasmd eal_static pthread rt ${femasmd_libs} ${bson_libs})
 add_dependencies(femasmd eal_static)
+
+#Add Model static lib
+LIST(APPEND model_SRC app/lmiced/lmspi.cpp
+    app/lmiced/udss.c
+)
+
+add_library(model_static STATIC ${model_SRC})
+SET_TARGET_PROPERTIES(model_static PROPERTIES OUTPUT_NAME "model")
+SET_TARGET_PROPERTIES(model_static PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+add_dependencies(model_static eal_static)
+#Add demo model
+LIST(APPEND demo_SRC app/lmiced/demo.cpp
+)
+
+add_executable(demomodel ${demo_SRC})
+target_link_libraries(demomodel model_static eal_static pthread rt ${femasmd_libs} ${bson_libs})
+add_dependencies(demomodel model_static)
+add_dependencies(demomodel eal_static)

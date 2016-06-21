@@ -118,13 +118,19 @@ int eal_event_wait_one(evtfd_t fd)
 
 int eal_event_create(lmice_event_t* e) {
     int ret = 0;
-    e->fd = sem_open(e->name, O_CREAT|O_EXCL, 0766, 0);
+    e->fd = sem_open(e->name, O_CREAT|O_EXCL,
+                     0666,
+                     0);
     if(e->fd == SEM_FAILED) {
+        ret = errno;
         sem_unlink(e->name);
-
-        ret = 1;
         e->fd = 0;
-        lmice_critical_print("eal_event_create[%s] failed[%d]\n", e->name, errno);
+        lmice_critical_print("eal_event_create[%s] failed[%d]\n", e->name, ret);
+    } else {
+        char name[64] = {0};
+        strcat(name, "/dev/shm/sem.");
+        strcat(name, e->name);
+        chmod(name, 0666);
     }
     return ret;
 }
@@ -144,7 +150,7 @@ int eal_event_open(lmice_event_t* e) {
     if(e->fd) {
         return 0;
     }
-    e->fd = sem_open(e->name, O_CREAT, 0666, 0);
+    e->fd = sem_open(e->name, O_RDONLY);
     if(e->fd == SEM_FAILED) {
         e->fd = 0;
         ret = 1;
@@ -186,3 +192,10 @@ int eal_event_wait_timed(evtfd_t fd, int millisec)
 }
 
 #endif
+
+
+int eal_event_init(evtfd_t fd)
+{
+    const int SHARED_BETWEEN_PROCESS = 1;
+    return sem_init(fd, SHARED_BETWEEN_PROCESS, 0);
+}

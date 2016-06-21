@@ -429,7 +429,6 @@ int init_epoll(int sfd) {
             break;
         } else if(n == 0) {
             /*lmice_info_log("Epoll timeout.");*/
-            continue;
         }
 
         for (i = 0; i < n; i++)
@@ -489,6 +488,7 @@ int init_epoll(int sfd) {
                         client_t* cli = NULL;
                         /* Register client */
                         int ret = 0;
+                        lmice_info_log("Client[%s] register in [%s]...\n", reg->symbol, msg.remote_un.sun_path);
                         /* Find or create client */
                         ret = lm_clientlist_register(ser->clilist, info->tid, info->pid, reg->symbol, &msg.remote_un);
 
@@ -499,6 +499,9 @@ int init_epoll(int sfd) {
                                 lmice_trace_info_t* pc = (lmice_trace_info_t*)cli->board.addr;
                                 pc->tid = info->tid;
                                 pc->pid = info->pid;
+                                lmice_info_log("Client[%s] joined at [%s], evt[%s], board[%s].\n",
+                                               reg->symbol, msg.remote_un.sun_path,
+                                               cli->event.name, cli->board.name);
                             }
                         } else {
                             lmice_error_log("Failed to register client[%s] as [%d]\n", msg.remote_un.sun_path, ret);
@@ -515,6 +518,8 @@ int init_epoll(int sfd) {
                         pubsub_shm_t *ps = NULL;
                         const lmice_sub_t* pb = (const lmice_sub_t*)msg.data;
                         const lmice_trace_info_t* info = &pb->info;
+
+                        lmice_logging(info, "Subscribe[%s] \n", pb->symbol);
 
                         hval = eal_hash64_fnv1a(pb->symbol, SYMBOL_LENGTH);
                         ret = lm_shmlist_sub(ser->shmlist, hval, &ps);
@@ -618,9 +623,12 @@ int init_epoll(int sfd) {
                         char name[SYMBOL_LENGTH] ={0};
                         GET_SHMNAME(pb->sub.symbol, SYMBOL_LENGTH, hval, name);
 
+                        lmice_logging(info, "Senddata[%s], client size:%u  sym[%s]", pb->sub.symbol, ser->clilist->count, name);
+
                         /* Find pub client */
                         ret = lm_clientlist_find(ser->clilist, &msg.remote_un, &cli);
                         if(ret != 0) {
+                            lmice_logging(info, "Senddata[%s], cant find client[%s]", pb->sub.symbol, msg.remote_un.sun_path);
                             break;
                         }
 
@@ -636,7 +644,7 @@ int init_epoll(int sfd) {
                                     for(j=0; j<cli->count; ++j) {
                                         symbol_shm_t *sym = &cli->symshm[j];
                                         pubsub_shm_t* ps = sym->ps;
-                                        if(ps->hval == hval && sym->type == SHM_SUB_TYPE) {
+                                        if(ps->hval == hval && sym->type & SHM_SUB_TYPE) {
                                             /* Add */
                                             lmice_sub_data_t* dt = (lmice_sub_data_t*)((char*)cli->board.addr + CLIENT_SUBPOS);
                                             eal_spin_lock(&dt->lock);
@@ -651,6 +659,7 @@ int init_epoll(int sfd) {
 
                                             /* Awake */
                                             eal_event_awake(cli->event.fd);
+                                            lmice_logging(info, "Fire senddata event to client[%s]\n", cli->addr.sun_path);
 
                                             break; /* break-for: cli->count */
                                         }
@@ -679,6 +688,7 @@ int init_epoll(int sfd) {
             server_t* cur;
             last = now;
             /* for each maintain-second, check client */
+            lmice_critical_log("begin maintain client size=%u\n", cur->clilist->count);
             cur = &g_server;
             lm_clientlist_maintain(cur->clilist);
         }

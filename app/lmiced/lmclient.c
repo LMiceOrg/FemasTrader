@@ -159,8 +159,18 @@ int lm_clientlist_find_or_create(clientlist_t *cl, struct sockaddr_un *addr, cli
             eal_shm_hash_name(hval, ncli->board.name);
             ncli->board.size = BOARD_SHMSIZE;
             ret = eal_shm_create(&ncli->board);
+            if(ret != 0) {
+                lmice_error_log("create shm[%s] failed[%d]", ncli->board.name, ret);
+            }
+            /*
+             * if(ret == 0) {
+                ret = eal_event_init((evtfd_t)ncli->board.addr);
+            }*/
             eal_event_hash_name(hval, ncli->event.name);
-            ret |= eal_event_create(&ncli->event);
+            ret = eal_event_create(&ncli->event);
+            if(ret != 0) {
+                lmice_error_log("create event[%s] failed[%d]", ncli->event.name, ret);
+            }
 
             ++ncur->count;
 
@@ -344,23 +354,40 @@ int lm_clientlist_maintain(clientlist_t *cl)
 {
     int ret;
     int err;
-    size_t i;
+    ssize_t i;
     clientlist_t *cur = cl;
-    eal_spin_lock(&cl->lock);
+    ret = eal_spin_trylock(&cl->lock);
+    if(ret != 0)
+        return 0;
     do {
         if(cur->count == 0)
             break;
-        for(i= cur->count -1; i>=0; --i) {
+        for(i= (ssize_t)cur->count -1; i>=0; --i) {
             client_t* cli = &cur->cli[i];
             ret = kill(cli->pid, 0);
             if(ret != 0) {
+                size_t j;
                 err = errno;
                 lmice_critical_log("process[%u] open failed[%d]\n", cli->pid, err);
-                lm_clientlist_unregister(cur, &cli->addr);
-                CLIENT_RECOVER_RESOURCE(cli, ret);
-                CLIENT_RECOVER_PUB_RIGHT(cli);
-                memmove(cli, &cur->cli[i+1], sizeof(client_t) * (cur->count-i-1) );
+                lmice_shm_t *shm = &cli->board;
+                lmice_event_t *event = &cli->event;
+                ret = eal_shm_destroy(shm);
+                lmice_critical_log("process[%u] remove shm[%s] as [%d]\n", cli->pid, shm->name, ret);
+                ret = eal_event_destroy(event);
+                lmice_critical_log("process[%u] remove evt[%s] as [%d]\n", cli->pid, event->name, ret);
+
+                for(j=0; j< cli->count; ++j) {
+                    symbol_shm_t *ss = &cli->symshm[j];
+                    pubsub_shm_t *ps = ss->ps;
+                    if(ss->type & SHM_PUB_TYPE) {
+                        ps->type &= SHM_SUB_TYPE;
+                    }
+                }
+                lmice_critical_log("process[%u] remove pub state\n", cli->pid);
+                memmove(cli, cli+1, sizeof(client_t) * (cur->count-i-1) );
                 --cur->count;
+                if( i== 0)
+                    break;
                 continue;
             }
         }

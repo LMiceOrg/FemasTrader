@@ -21,6 +21,8 @@
  *
  */
 
+typedef void(*symbol_callback)(const char* symbol, const void* addr, uint32_t size);
+
 class CLMSpi
 {
 public:
@@ -34,6 +36,10 @@ public:
     void subscribe(const char* symbol);
 
     void unsubscribe(const char* symbol);
+
+    void publish(const char* symbol);
+
+    void send(const char* symbol, const void* addr, int len);
 
     /** dir: 0:buy  1:sell
      * return: requestId
@@ -52,7 +58,7 @@ public:
      */
     int cancel(int requestId, int sysId = 0);
 
-//    int register_callback(const char* symbol, callback func);
+    int register_callback(symbol_callback func);
 
     /* order tracker */
 //    int get_order(const char* order_id, struct order_t * order);

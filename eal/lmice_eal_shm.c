@@ -18,9 +18,9 @@ int eal_shm_open_existing_with_mode(lmice_shm_t* shm, int mode)
     int ret = 0;
     shm->fd = shm_open(shm->name, mode, 0600);
     if(shm->fd == -1) {
-        /*
-         * lmice_debug_print("eal_shm_open_existing call shm_open(%s) return fd(%d) and size(%d) errno(%d)\n", shm->name, shm->fd, shm->size, errno);
-         */
+
+         lmice_debug_print("eal_shm_open_existing call shm_open(%s) return fd(%d) and size(%d) errno(%d)\n", shm->name, shm->fd, shm->size, errno);
+
         shm->fd = 0;
         return errno;
     } else {
@@ -35,16 +35,16 @@ int eal_shm_open_existing_with_mode(lmice_shm_t* shm, int mode)
             shm->size = (uint32_t)st.st_size;
             shm->addr = mmap(NULL, shm->size, prot, MAP_SHARED, shm->fd, 0);
             if((void*)shm->addr == MAP_FAILED) {
-                /*
-                * lmice_error_print("eal_shm_open_existing call mmap(%d) failed\n", shm->fd);
-                */
+
+                lmice_error_print("eal_shm_open_existing call mmap(%d) failed\n", shm->fd);
+
                 shm->addr = 0;
                 return errno;
             }
         } else {
-            /*
-             * lmice_error_print("eal_shm_open_existing call fstat(%d) failed\n", shm->fd);
-             */
+
+             lmice_error_print("eal_shm_open_existing call fstat(%d) failed\n", shm->fd);
+
             return errno;
         }
     }
@@ -55,7 +55,7 @@ int eal_shm_open_existing_with_mode(lmice_shm_t* shm, int mode)
 forceinline
 int eal_shm_open_with_mode(lmice_shm_t* shm, int mode) {
     int ret = 0;
-    shm->fd = shm_open(shm->name, mode, 0666);
+    shm->fd = shm_open(shm->name, mode, 06666);
     if(shm->fd == -1) {
         /*
          * lmice_debug_print("eal_shm_create call shm_open(%s) return fd(%d) and size(%u) errno(%d)\n", shm->name, shm->fd, shm->size, errno);
@@ -85,7 +85,11 @@ int eal_shm_open_with_mode(lmice_shm_t* shm, int mode) {
 
 int eal_shm_create(lmice_shm_t* shm)
 {
-    return eal_shm_open_with_mode(shm, O_RDWR|O_CREAT);
+    int ret;
+    ret = eal_shm_open_with_mode(shm, O_RDWR|O_CREAT);
+    if(ret == 0)
+        ret = fchmod(shm->fd, 0666);
+    return ret;
 }
 
 
