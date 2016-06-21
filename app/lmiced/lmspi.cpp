@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <signal.h>
 
 #include <iconv.h>
 #include <unistd.h>
@@ -12,10 +13,96 @@
 
 #include "lmice_eal_bson.h"
 
+#include "lmice_eal_shm.h"
+#include "lmice_eal_event.h"
+#include "lmice_eal_hash.h"
+#include "lmice_eal_spinlock.h"
+
+
+struct spi_private {
+    pthread_t pt;
+    volatile int quit_flag;
+    lmice_event_t event;
+    lmice_shm_t board;
+    uint32_t shmcount;
+    pubsub_shm_t shmlist[256];
+
+    void(*callback)(const char* symbol, const void* addr, uint32_t size);
+
+
+};
 
 #define SOCK_FILE "/var/run/lmiced.socket"
 
 #define OPT_LOG_DEBUG 1
+
+volatile int quit_flag = 0;
+
+void spi_signal_handler(int sig) {
+    if(sig == SIGTERM || sig == SIGINT)
+        quit_flag = 1;
+}
+
+
+void* spi_thread(void* priv) {
+    spi_private* p = (spi_private*) priv;
+    uint32_t cnt;
+    sub_detail_t* symlist = new sub_detail_t[CLIENT_SPCNT];
+    memset(symlist, 0, sizeof(sub_detail_t)*CLIENT_SPCNT);
+    for(;;) {
+        int ret = eal_event_wait_timed(p->event.fd, 500);
+        if(ret == -1) {
+            /* Timed out or interrupted */
+        } else if(ret == 0) {
+            /* Event fired */
+            lmice_sub_data_t* dt = (lmice_sub_data_t*)((char*)p->board.addr + CLIENT_SUBPOS);
+
+            /* Copy event */
+            eal_spin_lock(&dt->lock);
+
+            cnt = dt->count;
+            if(cnt <= CLIENT_SPCNT) {
+                memcpy(symlist, dt->sub, cnt*sizeof(sub_detail_t));
+            } else {
+                cnt = 0;
+            }
+            dt->count = 0;
+
+            eal_spin_unlock(&dt->lock);
+
+            /* Callback event */
+            for(size_t i=0; i<cnt; ++i) {
+                sub_detail_t* sd = symlist +i;
+                const char* symbol = sd->symbol;
+                uint64_t hval;
+                char name[SYMBOL_LENGTH] = {0};
+                hval = eal_hash64_fnv1a(symbol, strlen(symbol));
+                eal_shm_hash_name(hval, name);
+                for(size_t j=0; j<p->shmcount; ++j) {
+                    pubsub_shm_t* ps = &p->shmlist[j];
+                    lmice_shm_t* shm = &ps->shm;
+                    if(memcmp(shm->name, name, SYMBOL_LENGTH) == 0 &&
+                            ps->type == CLIENT_SUBSYM) {
+                        if(shm->fd == 0) {
+                            /* open shm */
+                            eal_shm_open_readonly(shm);
+                        }
+                        p->callback(symbol, shm->addr+sd->pos, sd->size);
+                        break;
+                    }
+                }
+            }
+        } /* else-if ret */
+
+        if(quit_flag == 1)
+            break;
+        if(p->quit_flag == 1)
+            break;
+    }/* end-for: ;;*/
+
+    delete[] symlist;
+    return NULL;
+}
 
 CLMSpi::CLMSpi(const char *name)
 {
@@ -26,22 +113,73 @@ CLMSpi::CLMSpi(const char *name)
     m_info.pid = getpid();
     m_info.tid = eal_gettid();
     m_info.type = LMICE_TRACE_TYPE;
-    lmice_trace_info_t* pinfo = (lmice_trace_info_t*)sid->data;
+    lmice_register_t *reg = (lmice_register_t*)sid->data;
+    lmice_trace_info_t* pinfo = &reg->info;
     pinfo->loglevel=0;
     pinfo->pid = m_info.pid;
     pinfo->tid = m_info.tid;
-//    time(&pinfo->tm);
-//    get_system_time(&pinfo->systime);
+    time(&pinfo->tm);
+    get_system_time(&pinfo->systime);
 
+    // Register signal handler
+    signal(SIGINT, spi_signal_handler);
+    /*signal(SIGCHLD,SIG_IGN);  ignore child */
+    /* signal(SIGTSTP,SIG_IGN);  ignore tty signals */
+    signal(SIGTERM,spi_signal_handler); /* catch kill signal */
+
+    //Register client
+    pinfo->type = EM_LMICE_REGCLIENT_TYPE;
+    sid->size = sizeof(lmice_register_t);
+    memset(reg->symbol, 0, SYMBOL_LENGTH);
+    strncpy(reg->symbol,name, strlen(name)>SYMBOL_LENGTH-1?SYMBOL_LENGTH-1:strlen(name));
+
+    int ret = send_uds_msg(sid);
+    if(ret == 0 ) {
+        lmice_critical_print("Register model[%s] ...\n", name);
+        usleep(10000);
+    } else {
+        int err = errno;
+        lmice_error_print("Register model[%s] failed[%d].\n", name, err);
+        finit_uds_msg(sid);
+        exit(ret);
+    }
+
+    // create private resource
+    spi_private* p = new spi_private;
+    memset(p, 0, sizeof(spi_private));
+
+    uint64_t hval;
+    hval = eal_hash64_fnv1a(&sid->local_un, SUN_LEN(&sid->local_un));
+
+    eal_shm_hash_name(hval, p->board.name);
+    eal_event_hash_name(hval, p->event.name);
+    for(size_t i=0; i<3; ++i) {
+        ret = eal_shm_open_readwrite(&p->board);
+        ret |= eal_event_open(&p->event);
+        if(ret != 0) {
+            usleep(10000);
+        }
+    }
+
+    if(ret != 0) {
+        lmice_error_print("Init model[%s] resource failed[%d].\n", name, ret);
+        finit_uds_msg(sid);
+        exit(ret);
+    }
+
+    /* run in other thread */
     logging("LMice client[ %s ] running %d:%d", m_name.c_str(), getuid(), getpid());
-
-
+    m_priv = (void*) p;
+    pthread_create(&p->pt, NULL, spi_thread, m_priv);
 
 }
 
 CLMSpi::~CLMSpi()
 {
     logging("LMice %s stopped.\n\n", m_name.c_str());
+    spi_private* p = (spi_private*)m_priv;
+    p->quit_flag = 1;
+    pthread_join(p->pt, NULL);
     finit_uds_msg(sid);
 }
 
@@ -150,7 +288,7 @@ static int code_convert(const char *from_charset,const char *to_charset,char *in
         if (cd==0)
                 return -1;
         memset(outbuf,0,outlen);
-        if (iconv(cd,pin,&inlen,pout,&outlen) == -1)
+        if (iconv(cd,pin,&inlen,pout,&outlen) == (size_t)-1)
                 return -1;
         iconv_close(cd);
         return 0;
@@ -171,19 +309,88 @@ std::string CLMSpi::gbktoutf8( char *pgbk)
 
 void CLMSpi::subscribe(const char *symbol)
 {
+
+    spi_private* p =(spi_private*)m_priv;
+
+    if(p->shmcount >= CLIENT_SPCNT) {
+        lmice_error_print("Sub/pub resource is full\n");
+        return;
+    }
+    if(strlen(symbol) >= SYMBOL_LENGTH) {
+        lmice_error_print("Sub symbol is too long.\n");
+        return;
+    }
+
+    char name[SYMBOL_LENGTH] ={0};
+    uint64_t hval;
+    hval = eal_hash64_fnv1a(symbol, strlen(symbol));
+    eal_shm_hash_name(hval, name);
+
+    pubsub_shm_t*ps;
+    lmice_shm_t*shm;
+    for(size_t i=0; i< p->shmcount; ++i) {
+        ps = &p->shmlist[i];
+        shm = &ps->shm;
+        if(ps->type == CLIENT_SUBSYM && memcmp(shm->name, name, SYMBOL_LENGTH) == 0) {
+            lmice_critical_print("Already subscribed resource[%s]\n", symbol);
+            return;
+        }
+
+    }
+    ps = &p->shmlist[p->shmcount];
+    shm = &ps->shm;
+    ps->type = CLIENT_SUBSYM;
+    memset(shm, 0, sizeof(lmice_shm_t) );
+    memcpy(shm->name, name, SYMBOL_LENGTH);
+
+
+    sid->size = sizeof(lmice_sub_t);
     lmice_sub_t *psub = (lmice_sub_t *)sid->data;
     lmice_trace_info_t *pinfo = &psub->info;
-
     time(&pinfo->tm);
     get_system_time(&pinfo->systime);
     pinfo->type = EM_LMICE_SUB_TYPE;
-    strncpy(psub->symbol, symbol, strlen(symbol)>sizeof(psub->symbol)?sizeof(psub->symbol):strlen(symbol));
+
+    memset(psub->symbol, 0, SYMBOL_LENGTH);
+    strncpy(psub->symbol, symbol, strlen(symbol));
 
     send_uds_msg(sid);
+
+
 }
 
 void CLMSpi::unsubscribe(const char *symbol)
 {
+    spi_private* p =(spi_private*)m_priv;
+
+    if(p->shmcount == 0) {
+        lmice_error_print("Sub/pub resource is empty.\n");
+        return;
+    }
+    if(strlen(symbol) >= SYMBOL_LENGTH) {
+        lmice_error_print("Sub symbol is too long.\n");
+        return;
+    }
+
+    char name[SYMBOL_LENGTH] ={0};
+    uint64_t hval;
+    hval = eal_hash64_fnv1a(symbol, strlen(symbol));
+    eal_shm_hash_name(hval, name);
+
+    pubsub_shm_t*ps;
+    lmice_shm_t*shm;
+    for(size_t i=0; i< p->shmcount; ++i) {
+        ps = &p->shmlist[i];
+        shm = &ps->shm;
+        if(ps->type == CLIENT_SUBSYM && memcmp(shm->name, name, SYMBOL_LENGTH) == 0) {
+            if(shm->fd != 0) {
+                /* Close shm */
+                eal_shm_close(shm->fd,shm->addr);
+            }
+        }
+
+    }
+
     lmice_unsub_t *psub = (lmice_unsub_t *)sid->data;
     lmice_trace_info_t *pinfo = &psub->info;
 
@@ -197,7 +404,8 @@ void CLMSpi::unsubscribe(const char *symbol)
 
 int CLMSpi::cancel(int requestId, int sysId)
 {
-    int req;
+    /*FIXME: autoincrease */
+    int req = 0;
     CTraderSpi* spi = static_cast<CTraderSpi*>(this);
     CUstpFtdcOrderActionField ord;
     memset(&ord,0, sizeof(ord));
@@ -218,11 +426,11 @@ int CLMSpi::cancel(int requestId, int sysId)
     memcpy(ord.UserID, spi->GetConf()->g_UserID, sizeof(ord.UserID) );
     ///本次撤单操作的本地编号
     //TUstpFtdcUserOrderLocalIDType	UserOrderActionLocalID;
-    sprintf(ord.UserOrderActionLocalID, "%012d",requestId);
+    sprintf(ord.UserOrderActionLocalID, "%012d",req);
 
     ///被撤订单的本地报单编号
 //    TUstpFtdcUserOrderLocalIDType	UserOrderLocalID;
-    sprintf(ord.UserOrderLocalID, "%012d", req);
+    sprintf(ord.UserOrderLocalID, "%012d", requestId);
     ///报单操作标志 ‘0’
 //    TUstpFtdcActionFlagType	ActionFlag;
     ord.ActionFlag =USTP_FTDC_AF_Delete;

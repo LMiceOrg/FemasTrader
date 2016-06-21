@@ -199,16 +199,17 @@ void eal_trace_color_print_per_thread(int type);
     FILE* fp = fopen("/var/log/lmiced.log", "a+");  \
     if(lmice_trace_debug_mode == 1) \
         fprintf(fp, \
-        "%s--%s:[%d:0x%x] -- %s[%d]"  format "\n", \
+        "%s--%s:[%d:0x%lx] -- %s[%d]"  format "\n", \
         current_time, lmice_trace_name[type].name, getpid(), pthread_self(), __FILE__,__LINE__, ##__VA_ARGS__); \
     else    \
         fprintf(fp, \
-        "%s--%s:[%d:0x%x]"  format "\n", \
+        "%s--%s:[%d:0x%lx]"  format "\n", \
         current_time, lmice_trace_name[type].name, getpid(), pthread_self(), ##__VA_ARGS__); \
     fclose(fp); \
     }while(0);
 
 #define LMICE_TRACE_PER_THREAD2(info, format, ...) do{ \
+    int log_level = info->loglevel;  \
     int size = strlen(format) + 32; \
     char *pformat = (char*)malloc(size);    \
     char current_time[26];  \
@@ -216,11 +217,13 @@ void eal_trace_color_print_per_thread(int type);
     current_time[24] = ' '; \
     FILE* fp = fopen("/var/log/lmiced.log", "a+");  \
     memset(pformat, 0, size);   \
-    strcat(pformat, "%s--%s:[%d:0x%lx]Log(%12.2lld):");    \
+    strcat(pformat, "%s--%s:[%d:0x%lx]Log(%ld):");    \
     strcat(pformat, format);    \
-    if(pformat+strlen(pformat)-1 != '\n') { \
+    if(*(pformat+strlen(pformat)-1) != '\n') { \
         strcat(pformat, "\n");  \
     }   \
+    if(log_level < lmice_trace_info || log_level > lmice_trace_none) \
+        log_level = lmice_trace_info;   \
     fprintf(fp, \
             pformat,    \
             current_time, lmice_trace_name[info->loglevel].name, \

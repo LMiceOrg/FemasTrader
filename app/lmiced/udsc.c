@@ -14,16 +14,23 @@ int main(int argc, char* argv[]) {
     lmice_sub_t*psub;
     lmice_trace_info_t *info;
     uds_msg* pmsg;
-    create_uds_msg(&pmsg);
+    int64_t a=121;
+    printf("%lu\n", sizeof(client_t));
+    return 1;
+//    char name[32] = {0};
+//    printf("the name is null[%s]\n", name);
+//    return 1;
+    create_uds_msg((void**)&pmsg);
 
     ret = init_uds_client(SOCK_FILE, pmsg);
+    lmice_critical_print("msg sun[%s] sz =%lu, total=%lu\n",pmsg->local_un.sun_path, SUN_LEN(&pmsg->local_un), sizeof(pmsg->local_un));
     lmice_critical_print("Init socket local %d\n", pmsg->sock);
     lmice_critical_print("Init socket local %s\n", pmsg->local_un.sun_path);
     lmice_critical_print("Init socket remote %s\n", pmsg->remote_un.sun_path);
     {
         int64_t tm;
         get_system_time(&tm);
-        lmice_warning_print("Time:%lld\n", tm);
+        lmice_warning_print("Time:%ld\n", tm);
     }
     psub = (lmice_sub_t*)pmsg->data;
     info = &(psub->info);
@@ -36,18 +43,18 @@ int main(int argc, char* argv[]) {
 
     pmsg->size = sizeof(lmice_sub_t);
 
-    lmice_info_print("Sub cu1701\n");
-    ret = sendto(pmsg->sock, pmsg->data, pmsg->size, 0, (struct sockaddr*)&(pmsg->remote_un), sizeof pmsg->remote_un);
-    if(ret == -1) {
-        err = errno;
-        lmice_critical_print("sendto failed [%d].\n", err);
-    }
-    lmice_info_print("Sub cu1701\n");
-    ret = sendto(pmsg->sock, pmsg->data, pmsg->size, 0, (struct sockaddr*)&(pmsg->remote_un), sizeof pmsg->remote_un);
-    if(ret == -1) {
-        err = errno;
-        lmice_critical_print("sendto failed [%d].\n", err);
-    }
+//    lmice_info_print("Sub cu1701\n");
+//    ret = sendto(pmsg->sock, pmsg->data, pmsg->size, 0, (struct sockaddr*)&(pmsg->remote_un), sizeof pmsg->remote_un);
+//    if(ret == -1) {
+//        err = errno;
+//        lmice_critical_print("sendto failed [%d].\n", err);
+//    }
+//    lmice_info_print("Sub cu1701\n");
+//    ret = sendto(pmsg->sock, pmsg->data, pmsg->size, 0, (struct sockaddr*)&(pmsg->remote_un), sizeof pmsg->remote_un);
+//    if(ret == -1) {
+//        err = errno;
+//        lmice_critical_print("sendto failed [%d].\n", err);
+//    }
 //    {
 
 //        ret = recvfrom(pmsg->sock, pmsg->data, sizeof pmsg->data, 0,(struct sockaddr*)&(pmsg->remote_un), &len);
@@ -59,7 +66,7 @@ int main(int argc, char* argv[]) {
     {
         int64_t tm;
         get_system_time(&tm);
-        lmice_warning_print("Time:%lld\n", tm);
+        lmice_warning_print("Time:%ld\n", tm);
     }
 
     return 0;

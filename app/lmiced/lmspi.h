@@ -5,6 +5,7 @@
 #include "udss.h"
 
 #include <string>
+#include <map>
 
 #include <stdarg.h>
 
@@ -65,6 +66,9 @@ private:
     std::string m_name;
     uds_msg *sid;
     lmice_trace_info_t m_info;
+//    sub_data_t* m_sub;
+    std::map<std::string, void*> m_shms;
+    void* m_priv;
 };
 
 #endif // LMSPI_H

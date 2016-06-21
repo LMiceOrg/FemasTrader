@@ -1,6 +1,7 @@
 #include "lmice_eal_event.h"
 #include "lmice_trace.h"
 #include "lmice_eal_hash.h"
+#include "lmice_eal_time.h"
 #include <string.h>
 #include <errno.h>
 
@@ -140,6 +141,9 @@ int eal_event_destroy(lmice_event_t* e) {
 
 int eal_event_open(lmice_event_t* e) {
     int ret = 0;
+    if(e->fd) {
+        return 0;
+    }
     e->fd = sem_open(e->name, O_CREAT, 0666, 0);
     if(e->fd == SEM_FAILED) {
         e->fd = 0;
@@ -171,23 +175,13 @@ int eal_event_wait_timed(evtfd_t fd, int millisec)
 {
     int ret;
     int cnt = 0;
-    do {
-        ret = sem_trywait(fd);
-        switch(ret)
-        {
-        case 0:
-            return ret;
-        case EAGAIN:
-            cnt += 1000;
-            sleep(1);
-            break;
-        case EDEADLK:
-        case EINTR:
-        case EINVAL:
-            return ret;
-        }
-
-    } while(cnt >= millisec);
+    struct timespec ts;
+    int64_t now;
+    get_system_time(&now);
+    now += millisec * 10000LL;
+    ts.tv_sec = now / 10000000LL;
+    ts.tv_nsec = now % 10000000LL;
+    ret = sem_timedwait(fd, &ts);
     return ret;
 }
 

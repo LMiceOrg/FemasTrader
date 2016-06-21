@@ -61,7 +61,9 @@ SET_TARGET_PROPERTIES(eal_static PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 
 #App Lmiced
 LIST(APPEND lmiced_SRCS app/lmiced/lmiced.c
-    app/lmiced/udss.c)
+    app/lmiced/udss.c
+    app/lmiced/lmshm.c
+    app/lmiced/lmclient.c)
 
 ADD_EXECUTABLE(lmiced ${lmiced_SRCS})
 target_link_libraries(lmiced eal_static pthread rt ${bson_libs})

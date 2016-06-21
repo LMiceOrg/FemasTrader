@@ -22,7 +22,9 @@ struct lmice_shm_s {
 #include "lmice_eal_shm_win.h"
 #endif
 
-
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct lmice_shm_s lmice_shm_t;
 
@@ -42,6 +44,8 @@ int eal_shm_open_readwrite(lmice_shm_t* shm);
 int eal_shm_hash_name(uint64_t hval, char* name);
 
 int eal_shm_create_or_open(lmice_shm_t* shm);
-
+#ifdef __cplusplus
+}
+#endif
 
 #endif /** LMICE_EAL_SHM_H */
