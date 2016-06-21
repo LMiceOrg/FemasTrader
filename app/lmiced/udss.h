@@ -37,6 +37,8 @@ typedef  struct {
     char symbol[32];
 } lmice_sub_t;
 
+typedef lmice_sub_t lmice_register_t;
+
 typedef lmice_sub_t lmice_unsub_t;
 
 typedef lmice_sub_t lmice_pub_t;
@@ -44,24 +46,30 @@ typedef lmice_sub_t lmice_pub_t;
 typedef lmice_pub_t lmice_unpub_t;
 
 typedef struct {
-    lmice_trace_info_t info;
-    char symbol[SYMBOL_LENGTH];
+    uint32_t pos;
     uint32_t size;
-    char data[512];
+    char symbol[SYMBOL_LENGTH];
+} sub_detail_t;
+
+typedef struct {
+    lmice_trace_info_t info;
+    sub_detail_t sub;
 } lmice_send_data_t;
+
 
 typedef struct {
     int64_t lock;
+    uint32_t padding;
     uint32_t count;
-    char symbol[SYMBOL_LENGTH];
-} sub_data_t;
+    sub_detail_t sub[1];
+} lmice_sub_data_t;
 
 
 struct uds_msg {
     int sock;
     struct sockaddr_un  remote_un;
     struct sockaddr_un  local_un;
-    int size;
+    ssize_t size;
     char data[1024];
 };
 

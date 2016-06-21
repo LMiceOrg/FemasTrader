@@ -141,6 +141,9 @@ int eal_event_destroy(lmice_event_t* e) {
 
 int eal_event_open(lmice_event_t* e) {
     int ret = 0;
+    if(e->fd) {
+        return 0;
+    }
     e->fd = sem_open(e->name, O_CREAT, 0666, 0);
     if(e->fd == SEM_FAILED) {
         e->fd = 0;

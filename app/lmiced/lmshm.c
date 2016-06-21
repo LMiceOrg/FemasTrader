@@ -33,7 +33,7 @@ int lm_shmlist_delete(shmlist_t *sl)
 }
 
 
-int lm_shmlist_pub(shmlist_t *sl, uint64_t hval)
+int lm_shmlist_pub(shmlist_t *sl, uint64_t hval, pubsub_shm_t **pp)
 {
     int ret = 0;
     pubsub_shm_t* ps = NULL;
@@ -48,14 +48,19 @@ int lm_shmlist_pub(shmlist_t *sl, uint64_t hval)
             ret = SHM_PUB_EAGAIN;
         } else {
             ps->type |= SHM_PUB_TYPE;
+            if(pp != NULL) {
+                *pp = ps;
+            }
         }
         eal_spin_unlock(&sl->lock);
     }
+
+
     return ret;
 }
 
 
-int lm_shmlist_sub(shmlist_t *sl, uint64_t hval)
+int lm_shmlist_sub(shmlist_t *sl, uint64_t hval, pubsub_shm_t **pp)
 {
     int ret = 0;
     pubsub_shm_t* ps = NULL;
@@ -68,7 +73,12 @@ int lm_shmlist_sub(shmlist_t *sl, uint64_t hval)
         eal_spin_lock(&sl->lock);
         ps->type |= SHM_SUB_TYPE;
         eal_spin_unlock(&sl->lock);
+        if(pp != NULL) {
+            *pp = ps;
+        }
     }
+
+
     return ret;
 }
 

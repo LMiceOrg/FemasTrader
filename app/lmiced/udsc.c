@@ -15,6 +15,8 @@ int main(int argc, char* argv[]) {
     lmice_trace_info_t *info;
     uds_msg* pmsg;
     int64_t a=121;
+    printf("%lu\n", sizeof(client_t));
+    return 1;
 //    char name[32] = {0};
 //    printf("the name is null[%s]\n", name);
 //    return 1;

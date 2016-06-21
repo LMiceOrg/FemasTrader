@@ -41,8 +41,8 @@ shmlist_t* lm_shmlist_create();
 int lm_shmlist_delete(shmlist_t* sl);
 
 /* Pub-sub by hval */
-int lm_shmlist_pub(shmlist_t* sl, uint64_t hval);
-int lm_shmlist_sub(shmlist_t* sl, uint64_t hval);
+int lm_shmlist_pub(shmlist_t* sl, uint64_t hval, pubsub_shm_t **pp);
+int lm_shmlist_sub(shmlist_t* sl, uint64_t hval, pubsub_shm_t **pp);
 int lm_shmlist_unpub(shmlist_t* sl, uint64_t hval);
 int lm_shmlist_unsub(shmlist_t* sl, uint64_t hval);
 

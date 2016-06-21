@@ -27,7 +27,7 @@ struct spi_private {
     uint32_t shmcount;
     pubsub_shm_t shmlist[256];
 
-    void(*callback)(const char* symbol, const void* addr);
+    void(*callback)(const char* symbol, const void* addr, uint32_t size);
 
 
 };
@@ -47,22 +47,22 @@ void spi_signal_handler(int sig) {
 void* spi_thread(void* priv) {
     spi_private* p = (spi_private*) priv;
     uint32_t cnt;
-    char* symlist = new char[SYMBOL_LENGTH*CLIENT_SPCNT];
-    memset(symlist, 0, SYMBOL_LENGTH*CLIENT_SPCNT);
+    sub_detail_t* symlist = new sub_detail_t[CLIENT_SPCNT];
+    memset(symlist, 0, sizeof(sub_detail_t)*CLIENT_SPCNT);
     for(;;) {
         int ret = eal_event_wait_timed(p->event.fd, 500);
         if(ret == -1) {
             /* Timed out or interrupted */
         } else if(ret == 0) {
             /* Event fired */
-            sub_data_t* dt = (sub_data_t*)((char*)p->board.addr + CLIENT_SUBPOS);
+            lmice_sub_data_t* dt = (lmice_sub_data_t*)((char*)p->board.addr + CLIENT_SUBPOS);
 
             /* Copy event */
             eal_spin_lock(&dt->lock);
 
             cnt = dt->count;
             if(cnt <= CLIENT_SPCNT) {
-                memcpy(symlist, dt->symbol, cnt*SYMBOL_LENGTH);
+                memcpy(symlist, dt->sub, cnt*sizeof(sub_detail_t));
             } else {
                 cnt = 0;
             }
@@ -72,7 +72,8 @@ void* spi_thread(void* priv) {
 
             /* Callback event */
             for(size_t i=0; i<cnt; ++i) {
-                const char* symbol = dt->symbol + i*SYMBOL_LENGTH;
+                sub_detail_t* sd = symlist +i;
+                const char* symbol = sd->symbol;
                 uint64_t hval;
                 char name[SYMBOL_LENGTH] = {0};
                 hval = eal_hash64_fnv1a(symbol, strlen(symbol));
@@ -86,7 +87,7 @@ void* spi_thread(void* priv) {
                             /* open shm */
                             eal_shm_open_readonly(shm);
                         }
-                        p->callback(symbol, shm->addr);
+                        p->callback(symbol, shm->addr+sd->pos, sd->size);
                         break;
                     }
                 }
@@ -112,7 +113,8 @@ CLMSpi::CLMSpi(const char *name)
     m_info.pid = getpid();
     m_info.tid = eal_gettid();
     m_info.type = LMICE_TRACE_TYPE;
-    lmice_trace_info_t* pinfo = (lmice_trace_info_t*)sid->data;
+    lmice_register_t *reg = (lmice_register_t*)sid->data;
+    lmice_trace_info_t* pinfo = &reg->info;
     pinfo->loglevel=0;
     pinfo->pid = m_info.pid;
     pinfo->tid = m_info.tid;
@@ -127,31 +129,46 @@ CLMSpi::CLMSpi(const char *name)
 
     //Register client
     pinfo->type = EM_LMICE_REGCLIENT_TYPE;
-    sid->size = sizeof(lmice_trace_info_t);
+    sid->size = sizeof(lmice_register_t);
+    memset(reg->symbol, 0, SYMBOL_LENGTH);
+    strncpy(reg->symbol,name, strlen(name)>SYMBOL_LENGTH-1?SYMBOL_LENGTH-1:strlen(name));
+
     int ret = send_uds_msg(sid);
-    if(ret == sid->size ) {
-        struct sockaddr_un addr;
-        socklen_t addr_len;
+    if(ret == 0 ) {
         lmice_critical_print("Register model[%s] ...\n", name);
-        sid->size = recvfrom(sid->sock, sid->data, sizeof sid->data, 0, (struct sockaddr*)&(addr), &addr_len);
-        lmice_critical_print("Registered model[%s] as [%d]\n", name, *((int*)sid->data));
+        usleep(10000);
+    } else {
+        int err = errno;
+        lmice_error_print("Register model[%s] failed[%d].\n", name, err);
+        finit_uds_msg(sid);
+        exit(ret);
     }
 
-    logging("LMice client[ %s ] running %d:%d", m_name.c_str(), getuid(), getpid());
-
-    // create thread
+    // create private resource
     spi_private* p = new spi_private;
     memset(p, 0, sizeof(spi_private));
 
     uint64_t hval;
-    hval = eal_hash64_fnv1a(sid->local_un.sun_path, strlen(sid->local_un.sun_path));
+    hval = eal_hash64_fnv1a(&sid->local_un, SUN_LEN(&sid->local_un));
 
     eal_shm_hash_name(hval, p->board.name);
-    eal_shm_open_readwrite(&p->board);
-
     eal_event_hash_name(hval, p->event.name);
-    eal_event_open(&p->event);
+    for(size_t i=0; i<3; ++i) {
+        ret = eal_shm_open_readwrite(&p->board);
+        ret |= eal_event_open(&p->event);
+        if(ret != 0) {
+            usleep(10000);
+        }
+    }
 
+    if(ret != 0) {
+        lmice_error_print("Init model[%s] resource failed[%d].\n", name, ret);
+        finit_uds_msg(sid);
+        exit(ret);
+    }
+
+    /* run in other thread */
+    logging("LMice client[ %s ] running %d:%d", m_name.c_str(), getuid(), getpid());
     m_priv = (void*) p;
     pthread_create(&p->pt, NULL, spi_thread, m_priv);
 
@@ -160,6 +177,9 @@ CLMSpi::CLMSpi(const char *name)
 CLMSpi::~CLMSpi()
 {
     logging("LMice %s stopped.\n\n", m_name.c_str());
+    spi_private* p = (spi_private*)m_priv;
+    p->quit_flag = 1;
+    pthread_join(p->pt, NULL);
     finit_uds_msg(sid);
 }
 

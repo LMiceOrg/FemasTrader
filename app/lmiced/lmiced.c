@@ -44,89 +44,92 @@ volatile int g_quit_flag = 0;
 
 struct server_s {
     int64_t lock;
+    int fd; /*for .pid file lock */
+    uds_msg* pmsg;
+    lmice_shm_t board;
 //    struct sockaddr_un addr;
-    uint32_t count;
-    client_t *clients[CLIENT_COUNT];
+//    uint32_t count;
+//    client_t *clients[CLIENT_COUNT];
 //    char symbol[SYMBOL_LENGTH];
 //    lmice_event_t event;
     clientlist_t *clilist;
     shmlist_t * shmlist;
-    struct server_s* next;
+//    struct server_s* next;
 
 };
 typedef struct server_s server_t;
 
 
 /** Global publish/subscribe client list */
-server_t clilist;
+server_t g_server;
 
 
-forceinline int find_client(server_t* cur, struct sockaddr_un* addr, client_t** client) {
-    size_t i;
-    do {
-        for(i=0; i<cur->count; ++i) {
-            client_t* cli = cur->clients[i];
-            if( memcmp(&cli->addr, addr, cli->addr_len) == 0) {
-                *client = cli;
-                return 0;
-            }
-        }
-        cur = cur->next;
-    } while(cur != NULL);
-    *client = NULL;
-    return -1;
-}
+//forceinline int find_client(server_t* cur, struct sockaddr_un* addr, client_t** client) {
+//    size_t i;
+//    do {
+//        for(i=0; i<cur->count; ++i) {
+//            client_t* cli = cur->clients[i];
+//            if( memcmp(&cli->addr, addr, cli->addr_len) == 0) {
+//                *client = cli;
+//                return 0;
+//            }
+//        }
+//        cur = cur->next;
+//    } while(cur != NULL);
+//    *client = NULL;
+//    return -1;
+//}
 
-forceinline int append_client(server_t* cur, client_t** client) {
-    do {
-        if(cur->count < CLIENT_COUNT) {
-            client_t* cli = (client_t*)malloc(sizeof(client_t));
-            cur->clients[cur->count] = cli;
-            cur->count ++;
-            *client = cli;
-            return 0;
-        } else {
-            server_t* ser = (server_t*)malloc(sizeof(server_t));
-            memset(ser, 0, sizeof(server_t));
-            cur->next = ser;
-        }
-        cur = cur->next;
-    } while(cur != NULL);
-    *client = NULL;
-    return -1;
-}
+//forceinline int append_client(server_t* cur, client_t** client) {
+//    do {
+//        if(cur->count < CLIENT_COUNT) {
+//            client_t* cli = (client_t*)malloc(sizeof(client_t));
+//            cur->clients[cur->count] = cli;
+//            cur->count ++;
+//            *client = cli;
+//            return 0;
+//        } else {
+//            server_t* ser = (server_t*)malloc(sizeof(server_t));
+//            memset(ser, 0, sizeof(server_t));
+//            cur->next = ser;
+//        }
+//        cur = cur->next;
+//    } while(cur != NULL);
+//    *client = NULL;
+//    return -1;
+//}
 
-forceinline int init_board(client_t* client, struct sockaddr_un *addr, socklen_t addr_len) {
-    int ret;
-    uint64_t hval;
-    hval = eal_hash64_fnv1a(addr->sun_path, strlen(addr->sun_path));
-    eal_shm_hash_name(hval, client->board.name);
-    client->board.size = CLIENT_BOARD;
-    ret = eal_shm_create(&client->board);
-    if(ret != 0) {
-        lmice_error_log("EAL create board[%s] failed as[%d]\n", addr->sun_path, ret);
-    }
-    return ret;
-}
+//forceinline int init_board(client_t* client, struct sockaddr_un *addr, socklen_t addr_len) {
+//    int ret;
+//    uint64_t hval;
+//    hval = eal_hash64_fnv1a(addr->sun_path, strlen(addr->sun_path));
+//    eal_shm_hash_name(hval, client->board.name);
+//    client->board.size = CLIENT_BOARD;
+//    ret = eal_shm_create(&client->board);
+//    if(ret != 0) {
+//        lmice_error_log("EAL create board[%s] failed as[%d]\n", addr->sun_path, ret);
+//    }
+//    return ret;
+//}
 
-forceinline int init_client(client_t* client, const lmice_trace_info_t* info, struct sockaddr_un *addr, socklen_t addr_len) {
-    int ret;
-    uint64_t hval;
-    memcpy(&client->addr, addr, addr_len);
-    client->pid = info->pid;
-    client->tid = info->tid;
-    client->addr_len = addr_len;
-    client->count = 0;
-    client->lock = 0;
-    hval = eal_hash64_fnv1a(addr->sun_path, strlen(addr->sun_path));
-    eal_event_hash_name(hval, client->event.name);
-    ret = eal_event_create(&client->event);
-    if(ret != 0) {
-        lmice_error_log("EAL create event[%s] failed as[%d]\n", addr->sun_path, ret);
-    }
-    ret |= init_board(client, addr, addr_len);
-    return ret;
-}
+//forceinline int init_client(client_t* client, const lmice_trace_info_t* info, struct sockaddr_un *addr, socklen_t addr_len) {
+//    int ret;
+//    uint64_t hval;
+//    memcpy(&client->addr, addr, addr_len);
+//    client->pid = info->pid;
+//    client->tid = info->tid;
+//    client->addr_len = addr_len;
+//    client->count = 0;
+//    client->lock = 0;
+//    hval = eal_hash64_fnv1a(addr->sun_path, strlen(addr->sun_path));
+//    eal_event_hash_name(hval, client->event.name);
+//    ret = eal_event_create(&client->event);
+//    if(ret != 0) {
+//        lmice_error_log("EAL create event[%s] failed as[%d]\n", addr->sun_path, ret);
+//    }
+//    ret |= init_board(client, addr, addr_len);
+//    return ret;
+//}
 
 
 
@@ -135,145 +138,146 @@ forceinline int init_client(client_t* client, const lmice_trace_info_t* info, st
     eal_shm_hash_name(hval, name);  \
     } while(0)
 
-forceinline int append_symbol(client_t* client, const char* symbol, size_t sym_len, int type) {
-    int ret = 1;
-    size_t i;
-    uint64_t hval = 0;
-    char name[32] = {0};
-    GET_SHMNAME(symbol, sym_len, hval, name);
+//forceinline int append_symbol(client_t* client, const char* symbol, size_t sym_len, int type) {
+//    int ret = 1;
+//    size_t i;
+//    uint64_t hval = 0;
+//    char name[32] = {0};
+//    GET_SHMNAME(symbol, sym_len, hval, name);
 
-    for(i=0; i< client->count; ++i) {
-        pubsub_shm_t* ps = &client->resshm[i];
-        lmice_shm_t* shm = &ps->shm;
-        if(memcmp(shm->name, name, 32) == 0 && ps->type == type) {
-            /* Already appended! */
-            lmice_critical_log("Client[%s] already append the symbol[%s] for [%d]\n", client->addr.sun_path, symbol, type);
-            ret = 0;
-            break;
-        }
-    }
-    if(ret == 1) {
-        /* Find nothing, so create new symbol */
-        if(client->count < SYMBOL_LENGTH) {
-            pubsub_shm_t* ps = &client->resshm[client->count];
-            lmice_shm_t* shm = &ps->shm;
-            ps->type = type;
-            ++client->count;
-            eal_shm_zero(shm);
-            eal_shm_hash_name(hval, shm->name);
-            shm->size = SYMBOL_SHMSIZE;
-            ret = eal_shm_create_or_open(shm);
-            if(ret != 0) {
-                lmice_error_log("Create shm[%s] failed as [%d].", name, ret);
-            }
-        } else {
-            lmice_error_log("Client[%s] symbol list is full, can't append symbol[%s]\n", client->addr.sun_path, symbol);
-        }
-    }
-    return ret;
-}
+//    for(i=0; i< client->count; ++i) {
+//        pubsub_shm_t* ps = &client->resshm[i];
+//        lmice_shm_t* shm = &ps->shm;
+//        if(memcmp(shm->name, name, 32) == 0 && ps->type == type) {
+//            /* Already appended! */
+//            lmice_critical_log("Client[%s] already append the symbol[%s] for [%d]\n", client->addr.sun_path, symbol, type);
+//            ret = 0;
+//            break;
+//        }
+//    }
+//    if(ret == 1) {
+//        /* Find nothing, so create new symbol */
+//        if(client->count < SYMBOL_LENGTH) {
+//            pubsub_shm_t* ps = &client->resshm[client->count];
+//            lmice_shm_t* shm = &ps->shm;
+//            ps->type = type;
+//            ++client->count;
+//            eal_shm_zero(shm);
+//            eal_shm_hash_name(hval, shm->name);
+//            shm->size = SYMBOL_SHMSIZE;
+//            ret = eal_shm_create_or_open(shm);
+//            if(ret != 0) {
+//                lmice_error_log("Create shm[%s] failed as [%d].", name, ret);
+//            }
+//        } else {
+//            lmice_error_log("Client[%s] symbol list is full, can't append symbol[%s]\n", client->addr.sun_path, symbol);
+//        }
+//    }
+//    return ret;
+//}
 
-forceinline int remove_symbol(client_t *client, const char* symbol, size_t sym_len, int type) {
-    int ret;
-    size_t i;
-    uint64_t hval = 0;
-    char name[32] = {0};
-    GET_SHMNAME(symbol, sym_len, hval, name);
-    for(i=0; i<client->count; ++i) {
-        pubsub_shm_t* ps = &client->resshm[i];
-        lmice_shm_t* shm = &ps->shm;
-        if(memcmp(shm->name, name, 32) == 0 && ps->type == type) {
-            ret = eal_shm_destroy(shm);
-            if(ret != 0) {
-                lmice_error_log("remove symbol[%s] [%d] failed as [%d].", shm->name, ps->type, ret);
-            }
-            memmove(ps, ps+1, (client->count-i-1)*sizeof(pubsub_shm_t) );
-            --client->count;
-            ret = 0;
-            break;
-        }
-    }
+//forceinline int remove_symbol(client_t *client, const char* symbol, size_t sym_len, int type) {
+//    int ret;
+//    size_t i;
+//    uint64_t hval = 0;
+//    char name[32] = {0};
+//    GET_SHMNAME(symbol, sym_len, hval, name);
+//    for(i=0; i<client->count; ++i) {
+//        pubsub_shm_t* ps = &client->resshm[i];
+//        lmice_shm_t* shm = &ps->shm;
+//        if(memcmp(shm->name, name, 32) == 0 && ps->type == type) {
+//            ret = eal_shm_destroy(shm);
+//            if(ret != 0) {
+//                lmice_error_log("remove symbol[%s] [%d] failed as [%d].", shm->name, ps->type, ret);
+//            }
+//            memmove(ps, ps+1, (client->count-i-1)*sizeof(pubsub_shm_t) );
+//            --client->count;
+//            ret = 0;
+//            break;
+//        }
+//    }
 
-    return ret;
-}
+//    return ret;
+//}
 
-forceinline int removeall_symbol(client_t* client) {
-    int ret = 0;
-    size_t i;
-    for(i=0; i<client->count; ++i) {
-        pubsub_shm_t* ps = &client->resshm[i];
-        lmice_shm_t* shm = &ps->shm;
-        ret = eal_shm_destroy(shm);
-        if(ret != 0) {
-            lmice_error_log("remove shm[%s] failed as [%d].", shm->name, ret);
-        }
-    }
-    client->count = 0;
-    return ret;
-}
+//forceinline int removeall_symbol(client_t* client) {
+//    int ret = 0;
+//    size_t i;
+//    for(i=0; i<client->count; ++i) {
+//        pubsub_shm_t* ps = &client->resshm[i];
+//        lmice_shm_t* shm = &ps->shm;
+//        ret = eal_shm_destroy(shm);
+//        if(ret != 0) {
+//            lmice_error_log("remove shm[%s] failed as [%d].", shm->name, ret);
+//        }
+//    }
+//    client->count = 0;
+//    return ret;
+//}
 
-forceinline int finit_client(client_t* client) {
-    int ret = 0;
-    ret |= removeall_symbol(client);
-    ret |= eal_event_destroy(&client->event);
-    ret |= eal_shm_destroy(&client->board);
-    if(ret != 0) {
-        lmice_error_log("EAL finit client[%s] failed as[%d]\n", client->addr.sun_path, ret);
-    }
-    return ret;
-}
+//forceinline int finit_client(client_t* client) {
+//    int ret = 0;
+//    ret |= removeall_symbol(client);
+//    ret |= eal_event_destroy(&client->event);
+//    ret |= eal_shm_destroy(&client->board);
+//    if(ret != 0) {
+//        lmice_error_log("EAL finit client[%s] failed as[%d]\n", client->addr.sun_path, ret);
+//    }
+//    return ret;
+//}
 
-forceinline int maint_client(server_t* cur) {
-    int ret;
-    int err;
-    size_t i;
-    do {
-        if(cur->count == 0)
-            break;
-        for(i= cur->count -1; i>=0; --i) {
-            client_t* cli = cur->clients[i];
-            ret = kill(cli->pid, 0);
-            if(ret != 0) {
-                err = errno;
-                lmice_critical_log("process[%u] open failed[%d]\n", cli->pid, err);
-                finit_client(cli);
-                free(cli);
-                memmove(cli, cur->clients[i+1], sizeof(void*) * (cur->count-i-1) );
-                --cur->count;
-                continue;
-            }
-        }
-        cur = cur->next;
-    } while(cur != NULL);
-    return 0;
-}
+//forceinline int maint_client(server_t* ser) {
+//    int ret;
+//    int err;
+//    size_t i;
+//    clientlist_t *cur = ser->clilist;
+//    do {
+//        if(cur->count == 0)
+//            break;
+//        for(i= cur->count -1; i>=0; --i) {
+//            client_t* cli = &cur->cli[i];
+//            ret = kill(cli->pid, 0);
+//            if(ret != 0) {
+//                err = errno;
+//                lmice_critical_log("process[%u] open failed[%d]\n", cli->pid, err);
+//                lm_clientlist_unregister(cur, &cli->addr);
+//                memmove(cli, cur->clients[i+1], sizeof(void*) * (cur->count-i-1) );
+//                --cur->count;
+//                continue;
+//            }
+//        }
+//        cur = cur->next;
+//    } while(cur != NULL);
+//    return 0;
+//}
 
-#define CLI_APPENDSYMBOL(info, ser,cli, msg, addr_len, sym, sym_len, type) do { \
-    int ret = 0;    \
-    /* Find or create client */ \
-    ret = find_client(ser, &msg.remote_un, &cli);   \
-    if(ret != 0) {  \
-        /* Don't found, so append new client */ \
-        ret = append_client(ser, &cli); \
-        if(ret != 0) {  \
-            lmice_error_log("Create client failed[%d]\n", ret);  \
-        } else {                                                \
-            init_client(cli, info, &msg.remote_un, addr_len);          \
-        }                                                       \
-    }                                                           \
-    /* Append symbol */ \
-    append_symbol(cli, sym, sym_len, type); \
-    } while(0)
+//#define CLI_APPENDSYMBOL(info, ser,cli, msg, addr_len, sym, sym_len, type) do { \
+//    int ret = 0;    \
+//    /* Find or create client */ \
+//    ret = find_client(ser, &msg.remote_un, &cli);   \
+//    if(ret != 0) {  \
+//        /* Don't found, so append new client */ \
+//        ret = append_client(ser, &cli); \
+//        if(ret != 0) {  \
+//            lmice_error_log("Create client failed[%d]\n", ret);  \
+//        } else {                                                \
+//            init_client(cli, info, &msg.remote_un, addr_len);          \
+//        }                                                       \
+//    }                                                           \
+//    /* Append symbol */ \
+//    append_symbol(cli, sym, sym_len, type); \
+//    } while(0)
 
-#define CLI_REMOVESYMBOL(ser, cli, msg, sym, sym_len, type) do{  \
-    int ret =0; \
-    /* Find client */   \
-    ret = find_client(ser, &msg.remote_un, &cli);   \
-    if(ret == 0) {  \
-        /* Remove symbol */ \
-        remove_symbol(cli, sym, sym_len, type); \
-    }   \
-    } while(0)
+//#define CLI_REMOVESYMBOL(ser, cli, msg, sym, sym_len, type) do{  \
+//    int ret =0; \
+//    /* Find client */   \
+//    ret = find_client(ser, &msg.remote_un, &cli);   \
+//    if(ret == 0) {  \
+//        /* Remove symbol */ \
+//        remove_symbol(cli, sym, sym_len, type); \
+//    }   \
+//    } while(0)
+
 
 static int init_daemon();
 int init_epoll(int sfd);
@@ -287,26 +291,32 @@ void signal_handler(int sig) {
 }
 
 int main(int argc, char* argv[]) {
-    uds_msg* pmsg;
-    struct timespec ts;
     uint64_t hval;
-    lmice_shm_t board;
     int rt;
-    int fd;
+
+    (void)argc;
+    (void)argv;
+
+    memset(&g_server, 0, sizeof(g_server));
+
     lmice_info_print("LMice server launching...\n");
     /* Init Daemon */
-    fd = init_daemon();
-    if(fd < 0) {
+    g_server.fd = init_daemon();
+    if(g_server.fd < 0) {
         lmice_error_log("Daemon init failed\n");
-        return fd;
+        return g_server.fd;
     }
 
+    /* Init pub/sub list */
+    g_server.shmlist = lm_shmlist_create();
+    g_server.clilist = lm_clientlist_create();
+
     /* Create Hugepage SharedMemory */
-    eal_shm_zero(&board);
+    eal_shm_zero(&g_server.board);
     hval = eal_hash64_fnv1a(BOARD_NAME, sizeof(BOARD_NAME)-1);
-    eal_shm_hash_name(hval, board.name);
-    board.size = 4096; /* 4K bytes*/
-    rt = eal_shm_create(&board);
+    eal_shm_hash_name(hval, g_server.board.name);
+    g_server.board.size = CLIENT_BOARD; /* 4K bytes*/
+    rt = eal_shm_create(&g_server.board);
     if(rt != 0) {
         lmice_error_log("Shm board init failed\n");
         return rt;
@@ -317,28 +327,24 @@ int main(int argc, char* argv[]) {
     /* signal(SIGTSTP,SIG_IGN);  ignore tty signals */
     signal(SIGTERM,signal_handler); /* catch kill signal */
 
-    ts.tv_sec = 0;
-    ts.tv_nsec = 10000000L;
-
     lmice_info_log("LMice server running.");
 
-    create_uds_msg((void**)&pmsg);
-    init_uds_server(SOCK_FILE, pmsg);
+    create_uds_msg((void**)&g_server.pmsg);
+    init_uds_server(SOCK_FILE, g_server.pmsg);
 
-    /* init pub/sub list */
-    memset(&clilist, 0, sizeof(clilist));
-    clilist.shmlist = lm_shmlist_create();
-
-    init_epoll(pmsg->sock);
+    init_epoll(g_server.pmsg->sock);
 
     /* Stop and clean resources */
-    finit_uds_msg(pmsg);
-    lmice_info_log("LMice server stopped.");
+    lmice_info_log("LMice server stopping...\n");
     rt=0;
-    rt |= eal_shm_destroy(&board);
-    rt |= close(fd);
+    rt |= finit_uds_msg(g_server.pmsg);
+    rt |= eal_shm_destroy(&g_server.board);
+    rt |= lm_clientlist_delete(g_server.clilist);
+    rt |= lm_shmlist_delete(g_server.shmlist);
+    rt |= close(g_server.fd);
     rt |= unlink(PID_FILE);
-    re |= lm_shmlist_delete(clilist.shmlist);
+    lmice_info_log("LMice server stopped [%d].\n", rt);
+
     return rt;
 }
 
@@ -447,7 +453,7 @@ int init_epoll(int sfd) {
                 uds_msg msg = {0};
                 socklen_t addr_len=sizeof(msg.remote_un);
                 msg.size = recvfrom(events[i].data.fd, msg.data, sizeof msg.data, 0, (struct sockaddr*)&(msg.remote_un), &addr_len);
-                if (count == -1)
+                if (msg.size == -1)
                 {
                     /* If errno == EAGAIN, that means we have read all
                          data. So go back to the main loop. */
@@ -456,7 +462,7 @@ int init_epoll(int sfd) {
                         lmice_error_log("Read(socket) error occured.");
                     }
                 } else {
-                    lmice_info_log("Read(socket) from %s[%d] done.", msg.remote_un.sun_path, addr_len);
+                    lmice_info_log("Read(socket) from %s[%ld] done.", msg.remote_un.sun_path, msg.size);
                     switch((int)(*msg.data)) {
                     case EM_LMICE_TRACE_TYPE:
                     {
@@ -477,76 +483,123 @@ int init_epoll(int sfd) {
                     }
                     case EM_LMICE_REGCLIENT_TYPE:
                     {
-                        const lmice_trace_info_t* info = (const lmice_trace_info_t*)&msg.data;
-                        server_t* ser=&clilist;
+                        const lmice_register_t* reg = (const lmice_register_t*)msg.data;
+                        const lmice_trace_info_t* info = &reg->info;
+                        server_t* ser=&g_server;
                         client_t* cli = NULL;
                         /* Register client */
                         int ret = 0;
                         /* Find or create client */
-                        ret = find_client(ser, &msg.remote_un, &cli);
-                        if(ret != 0) {
-                            /* Don't found, so append new client */
-                            ret = append_client(ser, &cli);
-                            if(ret != 0) {
-                                lmice_error_log("Register client[%s] failed[%d]\n", msg.remote_un.sun_path, ret);
-                            } else {
-                                ret = init_client(cli, info, &msg.remote_un, addr_len);
-                            }
-                        }
-                        /* Send state to client */
-                        *(int*)msg.data = ret;
-                        sendto(events[i].data.fd, msg.data, 4, 0, (struct sockaddr*)&(msg.remote_un), addr_len);
+                        ret = lm_clientlist_register(ser->clilist, info->tid, info->pid, reg->symbol, &msg.remote_un);
 
+                        /* Send state to client */
+                        if(ret == 0) {
+                            lm_clientlist_find(ser->clilist, &msg.remote_un, &cli);
+                            if(cli) {
+                                lmice_trace_info_t* pc = (lmice_trace_info_t*)cli->board.addr;
+                                pc->tid = info->tid;
+                                pc->pid = info->pid;
+                            }
+                        } else {
+                            lmice_error_log("Failed to register client[%s] as [%d]\n", msg.remote_un.sun_path, ret);
+                        }
                         break;
 
                     }
                     case EM_LMICE_SUB_TYPE:
                     {
-                        server_t *ser = &clilist;
+                        int ret;
+                        uint64_t hval;
+                        server_t *ser = &g_server;
                         client_t* cli = NULL;
+                        pubsub_shm_t *ps = NULL;
                         const lmice_sub_t* pb = (const lmice_sub_t*)msg.data;
                         const lmice_trace_info_t* info = &pb->info;
-                        lmice_logging(info, "Subscribe symbol[%s]", pb->symbol);
 
-                        CLI_APPENDSYMBOL(info, ser,cli, msg, addr_len, pb->symbol, strlen(pb->symbol), CLIENT_SUBSYM);
-
+                        hval = eal_hash64_fnv1a(pb->symbol, SYMBOL_LENGTH);
+                        ret = lm_shmlist_sub(ser->shmlist, hval, &ps);
+                        if(ret == 0) {
+                            ret = lm_clientlist_find(ser->clilist, &msg.remote_un, &cli);
+                            if(ret == 0) {
+                                ret = lm_client_sub(cli, ps, pb->symbol);
+                                if(ret == 0) {
+                                    lmice_logging(info, "Subscribe[%s] successed [%s]", pb->symbol, msg.remote_un.sun_path);
+                                } else {
+                                    lmice_logging(info, "Subscribe[%s] full sub error[%s]", pb->symbol, msg.remote_un.sun_path);
+                                }
+                            } else {
+                                lmice_logging(info, "Subscribe[%s] find client failed[%d].\n", pb->symbol, ret);
+                            }
+                        } else {
+                            lmice_logging(info, "Subscribe[%s] find shmlist failed[%d].\n", pb->symbol, ret);
+                        }
 
                         break;
 
                     }
                     case EM_LMICE_UNSUB_TYPE:
                     {
-                        server_t* ser = &clilist;
+                        int ret;
+                        server_t* ser = &g_server;
                         client_t* cli = NULL;
                         const lmice_unsub_t* pb = (const lmice_unsub_t*)msg.data;
                         const lmice_trace_info_t* info = &pb->info;
-                        lmice_logging(info, "Unsubscribe symbol[%s]", pb->symbol);
 
-                        CLI_REMOVESYMBOL(ser, cli, msg, pb->symbol, strlen(pb->symbol), CLIENT_SUBSYM);
+                        ret = lm_clientlist_find(ser->clilist, &msg.remote_un, &cli);
+                        if(ret == 0) {
+                            ret = lm_client_unsub(cli, NULL, pb->symbol);
+                            lmice_logging(info, "Unsubscribe[%s] successed [%s]", pb->symbol, msg.remote_un.sun_path);
+                        } else {
+                            lmice_logging(info, "Unsubscribe[%s] find client failed [%d]", pb->symbol, ret);
+                        }
 
                         break;
                     }
                     case EM_LMICE_PUB_TYPE:
                     {
-                        server_t* ser = &clilist;
+                        int ret;
+                        uint64_t hval;
+                        server_t* ser = &g_server;
                         client_t* cli = NULL;
+                        pubsub_shm_t *ps = NULL;
                         const lmice_pub_t* pb = (const lmice_pub_t*)msg.data;
                         const lmice_trace_info_t* info = &pb->info;
-                        lmice_logging(info, "Publish symbol[%s]", pb->symbol);
 
-                        CLI_APPENDSYMBOL(info, ser,cli, msg, addr_len, pb->symbol, strlen(pb->symbol), CLIENT_PUBSYM);
+                        hval = eal_hash64_fnv1a(pb->symbol, SYMBOL_LENGTH);
+                        ret = lm_shmlist_pub(ser->shmlist, hval, &ps);
+                        if(ret == 0) {
+                            ret = lm_clientlist_find(ser->clilist, &msg.remote_un, &cli);
+                            if(ret == 0) {
+                                ret = lm_client_pub(cli, ps, pb->symbol);
+                                if(ret == 0) {
+                                    lmice_logging(info,"Publish[%s] successed [%s]", pb->symbol, msg.remote_un.sun_path);
+                                } else {
+                                    lmice_logging(info,"Publish[%s] full pub failed[%d]\n", pb->symbol, ret );
+                                }
+                            } else {
+                                lmice_logging(info,"Publish[%s] find shmlist failed[%d]", pb->symbol, ret);
+                            }
+                        } else {
+                            lmice_logging(info, "Publish[%s] find shmlist failed[%d]", pb->symbol, ret);
+                        }
 
                         break;
                     }
                     case EM_LMICE_UNPUB_TYPE:
                     {
-                        server_t* ser = &clilist;
+                        int ret;
+                        server_t* ser = &g_server;
                         client_t* cli = NULL;
-                        const lmice_pub_t* pb = (const lmice_pub_t*)msg.data;
+                        const lmice_unpub_t* pb = (const lmice_unpub_t*)msg.data;
                         const lmice_trace_info_t* info = &pb->info;
-                        lmice_logging(info, "Publish symbol[%s]", pb->symbol);
 
-                        CLI_REMOVESYMBOL(ser, cli, msg, pb->symbol, strlen(pb->symbol), CLIENT_PUBSYM);
+                        ret = lm_clientlist_find(ser->clilist, &msg.remote_un, &cli);
+                        if(ret == 0) {
+                            ret = lm_client_unpub(cli, NULL, pb->symbol);
+                            lmice_logging(info, "Unpublish[%s] successed [%s]", pb->symbol, msg.remote_un.sun_path);
+                        } else {
+                            lmice_logging(info, "Unpublish[%s] find client failed [%d]", pb->symbol, ret);
+                        }
 
                         break;
 
@@ -554,56 +607,42 @@ int init_epoll(int sfd) {
                     case EM_LMICE_SEND_DATA:
                     {
                         /** Send data from publisher */
-                        server_t *ser = &clilist;
+                        server_t *ser = &g_server;
                         client_t *cli = NULL;
                         const lmice_send_data_t* pb = (const lmice_send_data_t*)msg.data;
                         const lmice_trace_info_t* info = &pb->info;
                         int ret =0;
                         size_t i;
-                        lmice_shm_t *shm;
+
                         uint64_t hval;
                         char name[SYMBOL_LENGTH] ={0};
-                        GET_SHMNAME(pb->symbol, strlen(pb->symbol), hval, name);
+                        GET_SHMNAME(pb->sub.symbol, SYMBOL_LENGTH, hval, name);
 
                         /* Find pub client */
-                        ret = find_client(ser, &msg.remote_un, &cli);
+                        ret = lm_clientlist_find(ser->clilist, &msg.remote_un, &cli);
                         if(ret != 0) {
                             break;
                         }
 
-                        /* Update pub data */
-                        ret = 1;
-                        for(i=0; i<cli->count; ++i) {
-                            pubsub_shm_t* ps = &cli->resshm[i];
-                            shm = &ps->shm;
-                            if(memcmp(shm->name, name, SYMBOL_LENGTH) == 0 && ps->type == CLIENT_PUBSYM) {
-                                memcpy(shm->addr, pb->data, pb->size);
-                                ret = 0;
-                                break;
-                            }
-                        }
                         /* Awake subs */
                         if(ret == 0)
                         {
                             /* Loop sub:clients */
-                            server_t *cur = &clilist;
                             size_t j;
+                            clientlist_t* cur = ser->clilist;
                             do {
                                 for(i=0; i<cur->count; ++i) {
-                                    client_t* cli = cur->clients[i];
-                                    if(cli == NULL)
-                                        continue;
+                                    client_t* cli = &cur->cli[i];
                                     for(j=0; j<cli->count; ++j) {
-                                        pubsub_shm_t* ps = &cli->resshm[i];
-                                        shm = &ps->shm;
-                                        if(memcmp(shm->name, name, SYMBOL_LENGTH) == 0 &&
-                                                ps->type == CLIENT_SUBSYM) {
+                                        symbol_shm_t *sym = &cli->symshm[j];
+                                        pubsub_shm_t* ps = sym->ps;
+                                        if(ps->hval == hval && sym->type == SHM_SUB_TYPE) {
                                             /* Add */
-                                            sub_data_t* dt = (sub_data_t*)((char*)cli->board.addr + CLIENT_SUBPOS);
+                                            lmice_sub_data_t* dt = (lmice_sub_data_t*)((char*)cli->board.addr + CLIENT_SUBPOS);
                                             eal_spin_lock(&dt->lock);
                                             if(dt->count<CLIENT_SPCNT) {
-                                                char* sym = dt->symbol+SYMBOL_LENGTH*dt->count;
-                                                memcpy(sym, pb->symbol, SYMBOL_LENGTH);
+                                                sub_detail_t* sd = dt->sub + dt->count;
+                                                memcpy(sd, &pb->sub, sizeof(sub_detail_t));
                                                 ++dt->count;
                                             } else if(dt->count > CLIENT_SPCNT) {
                                                 dt->count = 0;
@@ -620,7 +659,7 @@ int init_epoll(int sfd) {
                                 cur = cur->next;
                             } while(cur != NULL);
                         }
-                        lmice_logging(info, "Send data symbol[%s], size[%u]", pb->symbol, pb->size);
+                        lmice_logging(info, "Senddata[%s], size[%u]", pb->sub.symbol, pb->sub.size);
 
                     }
                     default:
@@ -640,10 +679,8 @@ int init_epoll(int sfd) {
             server_t* cur;
             last = now;
             /* for each maintain-second, check client */
-            cur = &clilist;
-            maint_client(cur);
-            cur = &clilist;
-            maint_client(cur);
+            cur = &g_server;
+            lm_clientlist_maintain(cur->clilist);
         }
     }/* end-while:1 */
 

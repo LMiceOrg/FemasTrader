@@ -209,6 +209,7 @@ void eal_trace_color_print_per_thread(int type);
     }while(0);
 
 #define LMICE_TRACE_PER_THREAD2(info, format, ...) do{ \
+    int log_level = info->loglevel;  \
     int size = strlen(format) + 32; \
     char *pformat = (char*)malloc(size);    \
     char current_time[26];  \
@@ -221,6 +222,8 @@ void eal_trace_color_print_per_thread(int type);
     if(*(pformat+strlen(pformat)-1) != '\n') { \
         strcat(pformat, "\n");  \
     }   \
+    if(log_level < lmice_trace_info || log_level > lmice_trace_none) \
+        log_level = lmice_trace_info;   \
     fprintf(fp, \
             pformat,    \
             current_time, lmice_trace_name[info->loglevel].name, \

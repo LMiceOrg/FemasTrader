@@ -66,19 +66,21 @@ int lm_clientlist_delete(clientlist_t* cl);
 int lm_clientlist_register(clientlist_t* cl, eal_tid_t tid, pid_t pid, const char* name, struct sockaddr_un* addr);
 int lm_clientlist_unregister(clientlist_t* cl, struct sockaddr_un *addr);
 
+/* Maintain */
+int lm_clientlist_maintain(clientlist_t* cl);
 
 /* Utilities */
 int lm_clientlist_find_or_create(clientlist_t* cl, struct sockaddr_un* addr, client_t** ppc);
 int lm_clientlist_find(clientlist_t* cl, struct sockaddr_un* addr, client_t** ppc);
 
 /* Publish/subscribe symbol */
-int lm_client_pub(client_t* cli, pubsub_shm_t* ps, char* symbol);
-int lm_client_sub(client_t* cli, pubsub_shm_t* ps, char* symbol);
-int lm_client_unpub(client_t* cli, pubsub_shm_t* ps, char* symbol);
-int lm_client_unsub(client_t* cli, pubsub_shm_t* ps, char* symbol);
+int lm_client_pub(client_t* cli, pubsub_shm_t* ps, const char* symbol);
+int lm_client_sub(client_t* cli, pubsub_shm_t* ps, const char* symbol);
+int lm_client_unpub(client_t* cli, pubsub_shm_t* ps, const char* symbol);
+int lm_client_unsub(client_t* cli, pubsub_shm_t* ps, const char* symbol);
 
-int lm_client_find_or_create(client_t* cli, pubsub_shm_t* ps, char* symbol, symbol_shm_t** pps);
-int lm_client_find(client_t* cli, pubsub_shm_t* ps, char* symbol, symbol_shm_t** pps);
+int lm_client_find_or_create(client_t* cli, pubsub_shm_t* ps, const char* symbol, symbol_shm_t** pps);
+int lm_client_find(client_t* cli, pubsub_shm_t* ps, const char* symbol, symbol_shm_t** pps);
 
 #ifdef __cplusplus
 }

@@ -6,6 +6,11 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #define CLIENT_RECOVER_RESOURCE(cli, ret) do{    \
     lmice_shm_t *shm = &cli->board; \
@@ -79,7 +84,7 @@ int lm_clientlist_delete(clientlist_t *cl)
 }
 
 
-int lm_clientlist_register(clientlist_t *cl, pthread_t tid, pid_t pid, const char *name, sockaddr_un *addr)
+int lm_clientlist_register(clientlist_t *cl, pthread_t tid, pid_t pid, const char *name, struct sockaddr_un *addr)
 {
     int ret = 0;
     client_t* cli = NULL;
@@ -109,6 +114,7 @@ int lm_clientlist_unregister(clientlist_t *cl, struct sockaddr_un *addr)
 
 int lm_clientlist_find_or_create(clientlist_t *cl, struct sockaddr_un *addr, client_t **ppc)
 {
+    int ret;
     uint64_t hval;
     size_t i;
     clientlist_t* ncur = NULL;
@@ -141,7 +147,7 @@ int lm_clientlist_find_or_create(clientlist_t *cl, struct sockaddr_un *addr, cli
             if(ncli == NULL) {
                 cur->next = lm_clientlist_create();
                 ncur = cur->next;
-                ncli = ncur->shmlist;
+                ncli = ncur->cli;
             }
 
             /* Init client */
@@ -199,7 +205,7 @@ int lm_clientlist_find(clientlist_t *sl, struct sockaddr_un *addr, client_t **pp
 }
 
 
-int lm_client_pub(client_t *cli, pubsub_shm_t *ps, char *symbol)
+int lm_client_pub(client_t *cli, pubsub_shm_t *ps, const char *symbol)
 {
     int ret;
     symbol_shm_t* sym = NULL;
@@ -211,7 +217,7 @@ int lm_client_pub(client_t *cli, pubsub_shm_t *ps, char *symbol)
 }
 
 
-int lm_client_sub(client_t *cli, pubsub_shm_t *ps, char *symbol)
+int lm_client_sub(client_t *cli, pubsub_shm_t *ps, const char *symbol)
 {
     int ret;
     symbol_shm_t* sym = NULL;
@@ -223,14 +229,15 @@ int lm_client_sub(client_t *cli, pubsub_shm_t *ps, char *symbol)
 }
 
 
-int lm_client_unpub(client_t *cli, pubsub_shm_t *ps, char *symbol)
+int lm_client_unpub(client_t *cli, pubsub_shm_t *ps, const char *symbol)
 {
     symbol_shm_t* sym = NULL;
     size_t i;
     eal_spin_lock(&cli->lock);
     for(i=0; i<cli->count; ++i) {
         sym = &cli->symshm[i];
-        if(memcmp(symbol, sym->symbol, SYMBOL_LENGTH) == 0) {
+        if( (ps && ps->hval == sym->ps->hval) ||
+            (!ps && memcmp(symbol, sym->symbol, SYMBOL_LENGTH) == 0) ) {
             if(sym->type & SHM_PUB_TYPE) {
                 sym->ps->type &= SHM_SUB_TYPE;
                 sym->type &= SHM_SUB_TYPE;
@@ -249,14 +256,18 @@ int lm_client_unpub(client_t *cli, pubsub_shm_t *ps, char *symbol)
 }
 
 
-int lm_client_unsub(client_t *cli, pubsub_shm_t *ps, char *symbol)
+int lm_client_unsub(client_t *cli, pubsub_shm_t *ps, const char *symbol)
 {
     symbol_shm_t* sym = NULL;
     size_t i;
+
+    (void)ps;
+
     eal_spin_lock(&cli->lock);
     for(i=0; i<cli->count; ++i) {
         sym = &cli->symshm[i];
-        if(memcmp(symbol, sym->symbol, SYMBOL_LENGTH) == 0) {
+        if( (ps && ps->hval == sym->ps->hval) ||
+            (!ps && memcmp(symbol, sym->symbol, SYMBOL_LENGTH) == 0) ) {
             if(sym->type & SHM_SUB_TYPE) {
                 sym->type &= SHM_PUB_TYPE;
             }
@@ -274,7 +285,7 @@ int lm_client_unsub(client_t *cli, pubsub_shm_t *ps, char *symbol)
 }
 
 
-int lm_client_find_or_create(client_t *cli, pubsub_shm_t *ps, char *symbol, symbol_shm_t **pps)
+int lm_client_find_or_create(client_t *cli, pubsub_shm_t *ps, const char *symbol, symbol_shm_t **pps)
 {
     int ret = 0;
     symbol_shm_t* sym = NULL;
@@ -297,7 +308,7 @@ int lm_client_find_or_create(client_t *cli, pubsub_shm_t *ps, char *symbol, symb
             sym->ps = ps;
             ++cli->count;
         } else {
-            ret = -1;
+            ret = 1;
         }
     }
     eal_spin_unlock(&cli->lock);
@@ -308,7 +319,7 @@ int lm_client_find_or_create(client_t *cli, pubsub_shm_t *ps, char *symbol, symb
 }
 
 
-int lm_client_find(client_t *cli, pubsub_shm_t *ps, char *symbol, symbol_shm_t **pps)
+int lm_client_find(client_t *cli, pubsub_shm_t *ps, const char *symbol, symbol_shm_t **pps)
 {
     int ret = 0;
     symbol_shm_t* sym = NULL;
@@ -326,4 +337,35 @@ int lm_client_find(client_t *cli, pubsub_shm_t *ps, char *symbol, symbol_shm_t *
 
     *pps = sym;
     return ret;
+}
+
+
+int lm_clientlist_maintain(clientlist_t *cl)
+{
+    int ret;
+    int err;
+    size_t i;
+    clientlist_t *cur = cl;
+    eal_spin_lock(&cl->lock);
+    do {
+        if(cur->count == 0)
+            break;
+        for(i= cur->count -1; i>=0; --i) {
+            client_t* cli = &cur->cli[i];
+            ret = kill(cli->pid, 0);
+            if(ret != 0) {
+                err = errno;
+                lmice_critical_log("process[%u] open failed[%d]\n", cli->pid, err);
+                lm_clientlist_unregister(cur, &cli->addr);
+                CLIENT_RECOVER_RESOURCE(cli, ret);
+                CLIENT_RECOVER_PUB_RIGHT(cli);
+                memmove(cli, &cur->cli[i+1], sizeof(client_t) * (cur->count-i-1) );
+                --cur->count;
+                continue;
+            }
+        }
+        cur = cur->next;
+    } while(cur != NULL);
+    eal_spin_unlock(&cl->lock);
+    return 0;
 }
