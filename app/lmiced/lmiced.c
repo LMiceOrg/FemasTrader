@@ -448,7 +448,6 @@ int init_epoll(int sfd) {
                      completely, as we are running in edge-triggered mode
                      and won't get a notification again for the same
                      data. */
-                ssize_t count;
                 uds_msg msg = {0};
                 socklen_t addr_len=sizeof(msg.remote_un);
                 msg.size = recvfrom(events[i].data.fd, msg.data, sizeof msg.data, 0, (struct sockaddr*)&(msg.remote_un), &addr_len);
@@ -461,7 +460,9 @@ int init_epoll(int sfd) {
                         lmice_error_log("Read(socket) error occured.");
                     }
                 } else {
-                    lmice_info_log("Read(socket) from %s[%ld] done.", msg.remote_un.sun_path, msg.size);
+                    /*
+                     * lmice_info_log("Read(socket) from %s[%ld] done.", msg.remote_un.sun_path, msg.size);
+                     */
                     switch((int)(*msg.data)) {
                     case EM_LMICE_TRACE_TYPE:
                     {
@@ -622,9 +623,9 @@ int init_epoll(int sfd) {
                         uint64_t hval;
                         char name[SYMBOL_LENGTH] ={0};
                         GET_SHMNAME(pb->sub.symbol, SYMBOL_LENGTH, hval, name);
-
+                        /*
                         lmice_logging(info, "Senddata[%s], client size:%u  sym[%s]", pb->sub.symbol, ser->clilist->count, name);
-
+                        */
                         /* Find pub client */
                         ret = lm_clientlist_find(ser->clilist, &msg.remote_un, &cli);
                         if(ret != 0) {

@@ -69,7 +69,7 @@ void* spi_thread(void* priv) {
 
             eal_spin_unlock(&dt->lock);
 
-            lmice_critical_print("Got %u message.\n", cnt);
+//            lmice_critical_print("Got %u message.\n", cnt);
 
             /* Callback event */
             for(size_t i=0; i<cnt; ++i) {
@@ -79,13 +79,13 @@ void* spi_thread(void* priv) {
                 char name[SYMBOL_LENGTH] = {0};
                 hval = eal_hash64_fnv1a(symbol, SYMBOL_LENGTH);
                 eal_shm_hash_name(hval, name);
-                lmice_critical_print("The %lu: name:%s, sym :%s\n", i, name, symbol);
+//                lmice_critical_print("The %lu: name:%s, sym :%s\n", i, name, symbol);
                 for(size_t j=0; j<p->shmcount; ++j) {
                     pubsub_shm_t* ps = &p->shmlist[j];
                     lmice_shm_t* shm = &ps->shm;
                     if(memcmp(shm->name, name, SYMBOL_LENGTH) == 0 &&
                             ps->type & CLIENT_SUBSYM) {
-                        lmice_critical_print("Aha, we have subscribed it!\n");
+//                        lmice_critical_print("Aha, we have subscribed it!\n");
                         if(shm->fd == 0) {
                             /* open shm */
                             eal_shm_open_readonly(shm);
