@@ -1,5 +1,8 @@
 #include "udss.h"
 
+#include "lmshm.h"
+#include "lmclient.h"
+
 #include "lmice_trace.h"
 #include "lmice_eal_thread.h"
 #include "lmice_eal_shm.h"
@@ -35,19 +38,7 @@ volatile int g_quit_flag = 0;
 
 
 /** sub list */
-struct client_s {
-    int64_t lock;
-    eal_tid_t tid;
-    pid_t pid;
-    lmice_event_t event;
-    lmice_shm_t board;
-    struct sockaddr_un addr;
-    socklen_t addr_len;
-    unsigned short count;
-    pubsub_shm_t resshm[CLIENT_SPCNT];
 
-};
-typedef struct client_s client_t;
 
 
 
@@ -58,6 +49,8 @@ struct server_s {
     client_t *clients[CLIENT_COUNT];
 //    char symbol[SYMBOL_LENGTH];
 //    lmice_event_t event;
+    clientlist_t *clilist;
+    shmlist_t * shmlist;
     struct server_s* next;
 
 };
@@ -334,7 +327,7 @@ int main(int argc, char* argv[]) {
 
     /* init pub/sub list */
     memset(&clilist, 0, sizeof(clilist));
-    memset(&clilist, 0, sizeof(clilist));
+    clilist.shmlist = lm_shmlist_create();
 
     init_epoll(pmsg->sock);
 
@@ -345,6 +338,7 @@ int main(int argc, char* argv[]) {
     rt |= eal_shm_destroy(&board);
     rt |= close(fd);
     rt |= unlink(PID_FILE);
+    re |= lm_shmlist_delete(clilist.shmlist);
     return rt;
 }
 
