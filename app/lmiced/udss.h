@@ -2,6 +2,7 @@
 #define UDSS_H
 
 #include "lmshm.h"
+#include "lmclient.h"
 
 #include "lmice_trace.h"
 #include "lmice_eal_shm.h"
@@ -13,12 +14,10 @@
 enum symbol_client_e{
     CLIENT_SUBSYM = 2,
     CLIENT_PUBSYM = 4,
-    SYMBOL_LENGTH=32,
     CLIENT_BOARD = 4*1024,  /* 8KB */
-    CLIENT_COUNT = 64,
-    SYMBOL_SHMSIZE = 8*1024*1024, /* 8MB */
+
+
     CLIENT_SUBPOS = 1024,
-    CLIENT_SPCNT = 256,
     MAINTAIN_PERIOD = 30
 };
 
