@@ -14,6 +14,7 @@ public:
 	{
 		m_ptr_bson = new bson_t;
 		bson_init(m_ptr_bson);
+		m_strJson = NULL;
 	}
 
 	~EalBson()
