@@ -6,6 +6,7 @@
 
 #include <stdlib.h>
 #include <errno.h>
+#include <string.h>
 
 
 int lmblk_create(lmblk_info *info, lmblk_t* blk) {

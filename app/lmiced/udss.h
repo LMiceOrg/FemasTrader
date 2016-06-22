@@ -11,6 +11,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
+#define BOARD_NAME "LMiced V1.0"
+
 enum symbol_client_e{
     CLIENT_SUBSYM = 2,
     CLIENT_PUBSYM = 4,
@@ -18,7 +20,10 @@ enum symbol_client_e{
 
 
     CLIENT_SUBPOS = 1024,
-    MAINTAIN_PERIOD = 30
+    MAINTAIN_PERIOD = 30,
+    SERVER_PUBPOS = 1024,
+    SERVER_EVTPOS = 0,
+    PUBLIST_LENGTH = 64,
 };
 
 enum lmice_spi_type_e {
@@ -48,8 +53,15 @@ typedef lmice_pub_t lmice_unpub_t;
 typedef struct {
     uint32_t pos;
     uint32_t size;
-    char symbol[SYMBOL_LENGTH];
+    uint64_t hval;
 } sub_detail_t;
+
+struct pub_detail_s {
+    uint32_t    pos;
+    uint32_t    size;
+    uint64_t     hval;
+};
+typedef struct pub_detail_s pub_detail_t;
 
 typedef struct {
     lmice_trace_info_t info;
@@ -64,6 +76,21 @@ typedef struct {
     sub_detail_t sub[1];
 } lmice_sub_data_t;
 
+struct lmice_pub_data_s {
+    int64_t lock;
+    int32_t padding;
+    int32_t count;
+    pub_detail_t pub[1];
+};
+typedef struct lmice_pub_data_s lmice_pub_data_t;
+
+
+struct lmice_data_detail_s {
+    int64_t lock;
+    int32_t count;
+    int32_t pos;
+};
+typedef struct lmice_data_detail_s lmice_data_detail_t;
 
 struct uds_msg {
     int sock;

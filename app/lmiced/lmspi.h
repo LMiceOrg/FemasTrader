@@ -41,6 +41,8 @@ public:
 
     void send(const char* symbol, const void* addr, int len);
 
+    void send2(const char* symbol, const void* addr, int len);
+
     /** dir: 0:buy  1:sell
      * return: requestId
      *

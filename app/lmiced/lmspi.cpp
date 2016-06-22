@@ -18,13 +18,22 @@
 #include "lmice_eal_hash.h"
 #include "lmice_eal_spinlock.h"
 
+struct spi_shm_t{
+    int type;
+    uint64_t hval;
+    char symbol[SYMBOL_LENGTH];
+    lmice_shm_t shm;
+
+};
+
 struct spi_private {
     pthread_t pt;
     volatile int quit_flag;
     lmice_event_t event;
+    lmice_shm_t server;
     lmice_shm_t board;
     uint32_t shmcount;
-    pubsub_shm_t shmlist[SHMLIST_COUNT];
+    spi_shm_t shmlist[SHMLIST_COUNT];
 
     void(*callback)(const char* symbol, const void* addr, uint32_t size);
 
@@ -36,6 +45,18 @@ struct spi_private {
 #define OPT_LOG_DEBUG 1
 
 volatile int quit_flag = 0;
+
+static int spi_shm_open(lmice_shm_t* shm, const char* name, int name_size, int shm_size) {
+    int ret;
+    uint64_t hval;
+
+    eal_shm_zero(shm);
+    hval = eal_hash64_fnv1a(name, name_size);
+    eal_shm_hash_name(hval, shm->name);
+    shm->size = shm_size; /* 4K bytes*/
+    ret = eal_shm_open_readwrite(shm);
+    return ret;
+}
 
 void spi_signal_handler(int sig) {
     if(sig == SIGTERM || sig == SIGINT)
@@ -69,28 +90,20 @@ void* spi_thread(void* priv) {
 
             eal_spin_unlock(&dt->lock);
 
-//            lmice_critical_print("Got %u message.\n", cnt);
+            //lmice_critical_print("Got %u message. %lu, %u\n", cnt, symlist->hval, j<p->shmcount);
 
             /* Callback event */
             for(size_t i=0; i<cnt; ++i) {
                 sub_detail_t* sd = symlist +i;
-                const char* symbol = sd->symbol;
-                uint64_t hval;
-                char name[SYMBOL_LENGTH] = {0};
-                hval = eal_hash64_fnv1a(symbol, SYMBOL_LENGTH);
-                eal_shm_hash_name(hval, name);
-//                lmice_critical_print("The %lu: name:%s, sym :%s\n", i, name, symbol);
                 for(size_t j=0; j<p->shmcount; ++j) {
-                    pubsub_shm_t* ps = &p->shmlist[j];
+                    spi_shm_t* ps = &p->shmlist[j];
                     lmice_shm_t* shm = &ps->shm;
-                    if(memcmp(shm->name, name, SYMBOL_LENGTH) == 0 &&
-                            ps->type & CLIENT_SUBSYM) {
-//                        lmice_critical_print("Aha, we have subscribed it!\n");
+                    if(sd->hval == ps->hval && ps->type & CLIENT_SUBSYM) {
                         if(shm->fd == 0) {
                             /* open shm */
                             eal_shm_open_readonly(shm);
                         }
-                        p->callback(symbol, shm->addr+sd->pos, sd->size);
+                        p->callback(ps->symbol, (const char*)shm->addr+sd->pos+sizeof(lmice_data_detail_t), sd->size);
                         break;
                     }
                 }
@@ -111,6 +124,12 @@ void* spi_thread(void* priv) {
 
 CLMSpi::CLMSpi(const char *name)
 {
+    int ret;
+    // create private resource
+    spi_private* p = new spi_private;
+    memset(p, 0, sizeof(spi_private));
+    m_priv = (void*) p;
+
     m_name = name;
     create_uds_msg((void**)&sid);
     init_uds_client(SOCK_FILE, sid);
@@ -132,13 +151,20 @@ CLMSpi::CLMSpi(const char *name)
     /* signal(SIGTSTP,SIG_IGN);  ignore tty signals */
     signal(SIGTERM,spi_signal_handler); /* catch kill signal */
 
+    ret = spi_shm_open(&p->server, BOARD_NAME, sizeof(BOARD_NAME)-1, CLIENT_BOARD);
+    if(ret != 0) {
+        lmice_error_print("Can't access LMICE daemon[%d].\n", ret);
+        finit_uds_msg(sid);
+        exit(ret);
+    }
+
     //Register client
     pinfo->type = EM_LMICE_REGCLIENT_TYPE;
     sid->size = sizeof(lmice_register_t);
     memset(reg->symbol, 0, SYMBOL_LENGTH);
     strncpy(reg->symbol,name, strlen(name)>SYMBOL_LENGTH-1?SYMBOL_LENGTH-1:strlen(name));
 
-    int ret = send_uds_msg(sid);
+    ret = send_uds_msg(sid);
     if(ret == 0 ) {
         lmice_critical_print("Register model[%s] ...\n", name);
         usleep(10000);
@@ -149,9 +175,7 @@ CLMSpi::CLMSpi(const char *name)
         exit(ret);
     }
 
-    // create private resource
-    spi_private* p = new spi_private;
-    memset(p, 0, sizeof(spi_private));
+    //spi init
 
     uint64_t hval;
     hval = eal_hash64_fnv1a(&sid->local_un, SUN_LEN(&sid->local_un));
@@ -180,7 +204,6 @@ CLMSpi::CLMSpi(const char *name)
 
     /* run in other thread */
     logging("LMice client[ %s ] running %d:%d", m_name.c_str(), getuid(), getpid());
-    m_priv = (void*) p;
     pthread_create(&p->pt, NULL, spi_thread, m_priv);
 
 }
@@ -337,23 +360,34 @@ void CLMSpi::subscribe(const char *symbol)
     hval = eal_hash64_fnv1a(sym, SYMBOL_LENGTH);
     eal_shm_hash_name(hval, name);
 
-    pubsub_shm_t*ps;
+    spi_shm_t*ps = NULL;
     lmice_shm_t*shm;
     for(size_t i=0; i< p->shmcount; ++i) {
         ps = &p->shmlist[i];
         shm = &ps->shm;
-        if(ps->type & CLIENT_SUBSYM && memcmp(shm->name, name, SYMBOL_LENGTH) == 0) {
-            lmice_critical_print("Already subscribed resource[%s]\n", symbol);
-            return;
+        if(ps->hval == hval) {
+            if(ps->type & SHM_SUB_TYPE) {
+                lmice_critical_print("Already subscribed resource[%s]\n", sym);
+                return;
+            } else {
+                ps->type |= SHM_SUB_TYPE;
+                break;
+            }
         }
+        ps = NULL;
 
     }
-    ps = &p->shmlist[p->shmcount];
-    shm = &ps->shm;
-    ps->type |= SHM_SUB_TYPE;
-    memset(shm, 0, sizeof(lmice_shm_t) );
-    memcpy(shm->name, name, SYMBOL_LENGTH);
-    ++p->shmcount;
+
+    if(!ps && p->shmcount < SHMLIST_COUNT) {
+        ps = &p->shmlist[p->shmcount];
+        shm = &ps->shm;
+        ps->type |= SHM_SUB_TYPE;
+        ps->hval = hval;
+        memcpy(ps->symbol, sym, SYMBOL_LENGTH);
+        memset(shm, 0, sizeof(lmice_shm_t) );
+        memcpy(shm->name, name, SYMBOL_LENGTH);
+        ++p->shmcount;
+    }
 
 
     sid->size = sizeof(lmice_sub_t);
@@ -388,25 +422,30 @@ void CLMSpi::unsubscribe(const char *symbol)
     hval = eal_hash64_fnv1a(sym, SYMBOL_LENGTH);
     eal_shm_hash_name(hval, name);
 
-    pubsub_shm_t*ps;
+    spi_shm_t*ps = NULL;
     lmice_shm_t*shm;
     for(size_t i=0; i< p->shmcount; ++i) {
         ps = &p->shmlist[i];
         shm = &ps->shm;
-        if(ps->type & SHM_SUB_TYPE && memcmp(shm->name, name, SYMBOL_LENGTH) == 0) {
+        if(ps->type & SHM_SUB_TYPE && ps->hval == hval) {
+            ps->type &= SHM_PUB_TYPE;
             if(shm->fd != 0 && shm->addr != 0) {
                 /* Close shm */
-                ps->type &= SHM_PUB_TYPE;
                 if(ps->type == 0) {
                     eal_shm_close(shm->fd,shm->addr);
-                    memmove(ps, ps+1, (p->shmcount-i-1)*sizeof(pubsub_shm_t));
+                    memmove(ps, ps+1, (p->shmcount-i-1)*sizeof(spi_shm_t));
                     --p->shmcount;
                 }
                 break;
             }
         }
 
+        ps = NULL;
+
     }
+
+    if(!ps)
+        return;
 
     lmice_unsub_t *psub = (lmice_unsub_t *)sid->data;
     lmice_trace_info_t *pinfo = &psub->info;
@@ -438,13 +477,17 @@ void CLMSpi::publish(const char *symbol)
     hval = eal_hash64_fnv1a(sym, SYMBOL_LENGTH);
     eal_shm_hash_name(hval, name);
 
-    pubsub_shm_t*ps = NULL;
+    spi_shm_t*ps = NULL;
     lmice_shm_t*shm;
     for(size_t i=0; i< p->shmcount; ++i) {
         ps = &p->shmlist[i];
         shm = &ps->shm;
-        if(ps->type & CLIENT_PUBSYM && memcmp(shm->name, name, SYMBOL_LENGTH) == 0) {
-            lmice_critical_print("Already published resource[%s]\n", symbol);
+        if(ps->hval == hval) {
+            if(ps->type & SHM_PUB_TYPE) {
+                lmice_critical_print("Already published resource[%s]\n", symbol);
+            } else {
+                ps->type |= SHM_PUB_TYPE;
+            }
             break;
         }
         ps = NULL;
@@ -453,7 +496,9 @@ void CLMSpi::publish(const char *symbol)
     if(!ps && p->shmcount < SHMLIST_COUNT) {
         ps = &p->shmlist[p->shmcount];
         shm = &ps->shm;
+        ps->hval = hval;
         ps->type |= SHM_PUB_TYPE;
+        memcpy(ps->symbol, sym, SYMBOL_LENGTH);
         memset(shm, 0, sizeof(lmice_shm_t) );
         memcpy(shm->name, name, SYMBOL_LENGTH);
         ++p->shmcount;
@@ -491,12 +536,12 @@ void CLMSpi::send(const char *symbol, const void *addr, int len)
     hval = eal_hash64_fnv1a(sym, SYMBOL_LENGTH);
     eal_shm_hash_name(hval, name);
 
-    pubsub_shm_t*ps = NULL;
+    spi_shm_t*ps = NULL;
     lmice_shm_t*shm;
     for(size_t i=0; i< p->shmcount; ++i) {
         ps = &p->shmlist[i];
         shm = &ps->shm;
-        if(ps->type & CLIENT_PUBSYM && memcmp(shm->name, name, SYMBOL_LENGTH) == 0) {
+        if(ps->type & SHM_PUB_TYPE && ps->hval == hval) {
             if(shm->fd == 0) {
                 ret =eal_shm_open_readwrite(shm);
                 if(ret != 0) {
@@ -505,17 +550,94 @@ void CLMSpi::send(const char *symbol, const void *addr, int len)
                 }
             }
             // write data
-            int64_t t;
-            get_system_time(&t);
-            ret = sprintf((char*)shm->addr, "shm send at %ld\n", t);
+            lmice_data_detail_t* data = (lmice_data_detail_t*)shm->addr;
+            eal_spin_lock(&data->lock);
+            memcpy((char*)shm->addr+data->pos+sizeof(lmice_data_detail_t), addr, len);
+            //padding 8bytes aligned
+            data->pos += len + 8 - (len % 8);
+            eal_spin_unlock(&data->lock);
             // Update lmiced
             lmice_send_data_t* sd = (lmice_send_data_t*)sid->data;
             sd->info.type = EM_LMICE_SEND_DATA;
             sd->sub.pos = 0;
             sd->sub.size = ret;
-            memcpy(sd->sub.symbol, sym, SYMBOL_LENGTH);
+            sd->sub.hval = hval;
             send_uds_msg(sid);
             break;
+        }
+        ps = NULL;
+
+    }
+}
+
+void CLMSpi::send2(const char *symbol, const void *addr, int len)
+{
+    int ret;
+    spi_private* p =(spi_private*)m_priv;
+    lmice_pub_data_t* pub = (lmice_pub_data_t*)((char*)p->server.addr+SERVER_PUBPOS);
+    evtfd_t efd = (evtfd_t)((char*)p->server.addr+SERVER_EVTPOS);
+
+    if(p->shmcount >= CLIENT_SPCNT) {
+        lmice_error_print("Sub/pub resource is full\n");
+        return;
+    }
+    if(strlen(symbol) >= SYMBOL_LENGTH) {
+        lmice_error_print("Pub symbol is too long.\n");
+        return;
+    }
+    char sym[SYMBOL_LENGTH] = {0};
+    char name[SYMBOL_LENGTH] ={0};
+    uint64_t hval;
+    strcpy(sym, symbol);
+    hval = eal_hash64_fnv1a(sym, SYMBOL_LENGTH);
+    eal_shm_hash_name(hval, name);
+
+    spi_shm_t*ps = NULL;
+    lmice_shm_t*shm;
+    for(size_t i=0; i< p->shmcount; ++i) {
+        ps = &p->shmlist[i];
+        shm = &ps->shm;
+        if(ps->type & CLIENT_PUBSYM && ps->hval == hval) {
+            if(shm->fd == 0) {
+                ret =eal_shm_open_readwrite(shm);
+                if(ret != 0) {
+                    lmice_error_print("spi_send:Open shm[%s] failed[%d]\n", shm->name, ret);
+                    break;
+                }
+            }
+            // write data
+            uint32_t pos;
+            lmice_data_detail_t* data = (lmice_data_detail_t*)shm->addr;
+            eal_spin_lock(&data->lock);
+            memcpy((char*)shm->addr+data->pos+sizeof(lmice_data_detail_t), addr, len);
+            //padding 8bytes aligned
+            pos = data->pos;
+            data->pos += len + 8 - (len % 8);
+            eal_spin_unlock(&data->lock);
+
+            //Try awake lmiced with event
+            bool sended = false;
+            ret = eal_spin_trylock(&pub->lock);
+            if( ret == 0) {
+                if(pub->count < PUBLIST_LENGTH) {
+                    pub_detail_t *pd = pub->pub + pub->count;
+                    pd->pos= pos;
+                    pd->size =len;
+                    pd->hval = hval;
+                    ++pub->count;
+                    sended = true;
+                }
+                eal_spin_unlock(&pub->lock);
+            }
+
+            if(sended) {
+                ret = eal_event_awake( efd );
+                break;
+            } else {
+                //Fallback to send the data by UDS
+                //send(symbol, addr, len);
+                lmice_critical_print("send2 failed\n");
+            }
         }
         ps = NULL;
 

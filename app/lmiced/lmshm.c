@@ -132,7 +132,8 @@ int lm_shmlist_find_or_create(shmlist_t *sl, uint64_t hval, pubsub_shm_t **pps)
     } while(cur != NULL && ps == NULL);
     eal_spin_unlock(&sl->lock);
 
-    *pps = ps;
+    if(pps)
+        *pps = ps;
     return ret;
 
 }
@@ -157,8 +158,8 @@ int lm_shmlist_find(shmlist_t *sl, uint64_t hval, pubsub_shm_t **pps)
         cur = cur->next;
     }while(cur != NULL && ps == NULL);
     eal_spin_unlock(&sl->lock);
-
-    *pps = ps;
+    if(pps)
+        *pps = ps;
 
     return 0;
 }

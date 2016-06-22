@@ -150,31 +150,43 @@ int lm_clientlist_find_or_create(clientlist_t *cl, struct sockaddr_un *addr, cli
                 ncli = ncur->cli;
             }
 
-            /* Init client */
+            /* Init client:IC */
             memset(ncli, 0, sizeof(client_t));
             memcpy(&ncli->addr, addr, addr_len);
             ncli->addr_len = addr_len;
 
+            /* IC1: Create board shared memory */
             hval = eal_hash64_fnv1a(addr, addr_len);
             eal_shm_hash_name(hval, ncli->board.name);
             ncli->board.size = BOARD_SHMSIZE;
             ret = eal_shm_create(&ncli->board);
-            if(ret != 0) {
-                lmice_error_log("create shm[%s] failed[%d]", ncli->board.name, ret);
-            }
-            /*
-             * if(ret == 0) {
-                ret = eal_event_init((evtfd_t)ncli->board.addr);
-            }*/
-            eal_event_hash_name(hval, ncli->event.name);
-            ret = eal_event_create(&ncli->event);
-            if(ret != 0) {
-                lmice_error_log("create event[%s] failed[%d]", ncli->event.name, ret);
+            if(ret == 0) {
+                /* IC2: Create private semaphore */
+                ret = eal_eventp_init((evtfd_t)ncli->board.addr);
+                if(ret == 0) {
+                    /* IC3: Create public semaphore */
+                    eal_event_hash_name(hval, ncli->event.name);
+                    ret = eal_event_create(&ncli->event);
+                    if(ret == 0) {
+                        ++ncur->count;
+                        cli = ncli;
+                    } else {
+                        lmice_error_log("IC3 create event[%s] failed[%d]", ncli->event.name, ret);
+                        /* Clean IC2 evt*/
+                        eal_eventp_close((evtfd_t)ncli->board.addr);
+                        /* Clean IC1 shm*/
+                        eal_shm_destroy(&ncli->board);
+                    }
+                } else {
+                    lmice_error_log("IC2 create event failed[%d]", ret);
+                    /* Clean IC1 shm*/
+                    eal_shm_destroy(&ncli->board);
+                }
+            } else {
+                lmice_error_log("IC1 create client board shm[%s] failed[%d]", ncli->board.name, ret);
             }
 
-            ++ncur->count;
 
-            cli = ncli;
             break;
         }
 

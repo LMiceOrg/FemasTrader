@@ -34,14 +34,12 @@ void delete_uds_msg(void** ppmsg) {
 }
 
 int init_uds_server(const char* srv_name, struct uds_msg* msg) {
-    struct sockaddr_un  srv_un = {0};
-    int sock;
 
     memset(msg, 0, sizeof(struct uds_msg));
 
     if((msg->sock = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1) {
         lmice_error_log("UDS socket create failed.");
-        return -1;
+        return 1;
     }
 
     msg->local_un.sun_family = AF_UNIX;
@@ -50,17 +48,17 @@ int init_uds_server(const char* srv_name, struct uds_msg* msg) {
 
     if(bind(msg->sock, (struct sockaddr*)&(msg->local_un), sizeof(msg->local_un)) == -1) {
         lmice_error_log("UDS socket bind failed.");
-        return -1;
+        return 1;
     }
 
     chmod(srv_name, 0666);
 
     if( make_socket_non_blocking(msg->sock) == -1) {
         lmice_error_log("UDS socket nonblock failed.");
-        return -1;
+        return 1;
     }
 
-    return sock;
+    return 0;
 }
 
 
@@ -105,6 +103,7 @@ int init_uds_client(const char* srv_name, struct uds_msg* msg) {
         return -1;
     }
     */
+    return 0;
 
 }
 

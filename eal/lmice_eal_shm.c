@@ -55,7 +55,7 @@ int eal_shm_open_existing_with_mode(lmice_shm_t* shm, int mode)
 forceinline
 int eal_shm_open_with_mode(lmice_shm_t* shm, int mode) {
     int ret = 0;
-    shm->fd = shm_open(shm->name, mode, 06666);
+    shm->fd = shm_open(shm->name, mode, 0666);
     if(shm->fd == -1) {
         /*
          * lmice_debug_print("eal_shm_create call shm_open(%s) return fd(%d) and size(%u) errno(%d)\n", shm->name, shm->fd, shm->size, errno);
@@ -87,8 +87,9 @@ int eal_shm_create(lmice_shm_t* shm)
 {
     int ret;
     ret = eal_shm_open_with_mode(shm, O_RDWR|O_CREAT);
-    if(ret == 0)
+    /*if(ret == 0)
         ret = fchmod(shm->fd, 0666);
+    */
     return ret;
 }
 
