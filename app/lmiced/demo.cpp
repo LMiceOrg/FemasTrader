@@ -1,10 +1,15 @@
 #include "lmspi.h"
 
+#include "lmice_trace.h"
+#include "lmice_eal_time.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 #include <time.h>
-void callback (const char* symbol, const void* addr, uint32_t size)
+void callback (const char* symbol, const void* addr, int32_t size)
 {
-    int64_t t;
-    int64_t t2;
+    int64_t t = 0;
+    int64_t t2 = 0;
     get_system_time(&t);
     //lmice_info_print("callback symbol %s as size %d, at %lx\n", symbol, size, addr);
     //lmice_warning_print("%s data is: %s\n",symbol, (const char*)addr);
@@ -22,21 +27,23 @@ int main() {
     spi.publish("demo");
 
     lmice_info_print("reg callback\n");
-    spi.register_callback(callback);
+    spi.register_callback(callback, "demo");
     sleep(1);
-    usleep(100000);
     lmice_info_print("senddata demo\n");
     for(size_t i=0; i< 10; ++i) {
         char buff[64];
         int64_t t;
-        int ret;
+        int size;
         get_system_time(&t);
         memset(buff, 0, 64);
-        ret = sprintf(buff, "shm send at %ld\n", t);
+        size = sprintf(buff, "shm send at %ld\n", t);
 
-        spi.send2("demo", buff, ret);
+        spi.send("demo", buff, size);
         sleep(1);
     }
+
+    printf("Press Ctrl+C to quit.\n");
+    spi.join();
 
     return 0;
 

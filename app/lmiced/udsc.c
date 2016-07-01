@@ -3,6 +3,9 @@
 #include "lmice_trace.h"
 #include "eal/lmice_eal_time.h"
 
+#include <pthread.h>
+#include <semaphore.h>
+
 #include <errno.h>
 
 #define SOCK_FILE "/var/run/lmiced.socket"
@@ -15,7 +18,7 @@ int main(int argc, char* argv[]) {
     lmice_trace_info_t *info;
     uds_msg* pmsg;
     int64_t a=121;
-    printf("%lu\n", sizeof(client_t));
+    printf("%lu\n", sizeof(sem_t));
     return 1;
 //    char name[32] = {0};
 //    printf("the name is null[%s]\n", name);

@@ -51,15 +51,15 @@ typedef lmice_sub_t lmice_pub_t;
 typedef lmice_pub_t lmice_unpub_t;
 
 typedef struct {
-    uint32_t pos;
-    uint32_t size;
-    uint64_t hval;
+    uint32_t    pos;
+    int32_t     size;
+    uint64_t    hval;
 } sub_detail_t;
 
 struct pub_detail_s {
     uint32_t    pos;
-    uint32_t    size;
-    uint64_t     hval;
+    int32_t     size;
+    uint64_t    hval;
 };
 typedef struct pub_detail_s pub_detail_t;
 

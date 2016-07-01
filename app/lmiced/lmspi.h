@@ -1,27 +1,13 @@
 #ifndef LMSPI_H
 #define LMSPI_H
 
-#include "lmice_trace.h"
-#include "udss.h"
+#include <stdarg.h>
+#include <stdint.h>
 
 #include <string>
-#include <map>
-
-#include <stdarg.h>
-
-#include <iconv.h>
-#include <unistd.h>
-#include <sys/types.h>
 
 
-#define EXCHANGE_ID "SHFE"
-
-/**
- * config: 开平模式，在config中设置
- *
- */
-
-typedef void(*symbol_callback)(const char* symbol, const void* addr, uint32_t size);
+typedef void(*symbol_callback)(const char* symbol, const void* addr, int size);
 
 class CLMSpi
 {
@@ -41,8 +27,6 @@ public:
 
     void send(const char* symbol, const void* addr, int len);
 
-    void send2(const char* symbol, const void* addr, int len);
-
     /** dir: 0:buy  1:sell
      * return: requestId
      *
@@ -50,7 +34,7 @@ public:
      * 增加一个字段
      * （time，order, volumn)组合
      */
-    int order(const char* symbol, int dir, double price, int num);
+    //int order(const char* symbol, int dir, double price, int num);
 
     /**
      * @brief cancel
@@ -58,24 +42,24 @@ public:
      * @param sysId: system return Id
      * return requestId
      */
-    int cancel(int requestId, int sysId = 0);
+    //int cancel(int requestId, int sysId = 0);
 
-    int register_callback(symbol_callback func);
+    int register_callback(symbol_callback func, const char* symbol = NULL);
+
+    int join();
+
+    int isquit();
 
     /* order tracker */
 //    int get_order(const char* order_id, struct order_t * order);
     /* P & L tracker */
     /* position tracker */
-private:
-	void logging_bson_order( void *ptrOrd );
-	void logging_bson_cancel( void *ptrOrd );
+//private:
+//	void logging_bson_order( void *ptrOrd );
+//	void logging_bson_cancel( void *ptrOrd );
 
 private:
     std::string m_name;
-    uds_msg *sid;
-    lmice_trace_info_t m_info;
-//    sub_data_t* m_sub;
-    std::map<std::string, void*> m_shms;
     void* m_priv;
 };
 
