@@ -5,7 +5,7 @@ set(CMAKE_VERBOSE_MAKEFILE on)
 
 IF( ${CMAKE_CXX_COMPILER} MATCHES  "[cg][+][+]")
     MESSAGE("G++ ")
-    set(CMAKE_CXX_FLAGS "-Wall")
+    set(CMAKE_CXX_FLAGS "-Wall -std=c++11")
     set(CMAKE_CXX_FLAGS_DEBUG "-g3")
     set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 ELSE()

@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#if defined(__APPLE__) || defined(linux)
+#if defined(__APPLE__) || defined(__linux__)
 
 typedef int     shmfd_t;
 typedef void*   addr_t;

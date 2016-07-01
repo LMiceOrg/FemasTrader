@@ -24,6 +24,30 @@
 
 //#define EXCHANGE_ID "SHFE"
 
+/** dir: 0:buy  1:sell
+ * return: requestId
+ *
+ *  开 平:后台维护
+ * 增加一个字段
+ * （time，order, volumn)组合
+ */
+//int order(const char* symbol, int dir, double price, int num);
+
+/**
+ * @brief cancel
+ * @param requestId: order return requestId
+ * @param sysId: system return Id
+ * return requestId
+ */
+//int cancel(int requestId, int sysId = 0);
+/* order tracker */
+//    int get_order(const char* order_id, struct order_t * order);
+/* P & L tracker */
+/* position tracker */
+//private:
+//	void logging_bson_order( void *ptrOrd );
+//	void logging_bson_cancel( void *ptrOrd );
+
 typedef void(*proto_callback)(const char* symbol, const void* addr, int size);
 struct spi_shm_t{
     int type;
@@ -31,10 +55,31 @@ struct spi_shm_t{
     char symbol[SYMBOL_LENGTH];
     lmice_shm_t shm;
     proto_callback callback;
+    csymbol_callback pcall;
+    void* udata;
 
 };
 
+struct worker_item_s {
+    CLMSpi *pthis;
+    csymbol_callback pcall;
+    proto_callback callback;
+    char symbol[SYMBOL_LENGTH];
+    const void* addr;
+    int size;
+
+};
+typedef struct worker_item_s worker_item_t;
+
+struct worker_pool_t {
+    int64_t lock;
+    evtfd_t count;
+    worker_item_t item[128];
+};
+
 struct spi_private {
+    CLMSpi *pthis;
+
     pthread_t pt;
     volatile int quit_flag;
     lmice_event_t event;
@@ -42,8 +87,11 @@ struct spi_private {
     lmice_shm_t board;
     uint32_t shmcount;
     spi_shm_t shmlist[SHMLIST_COUNT];
-
+    csymbol_callback pcall;
     proto_callback callback;
+    void* udata;
+    pthread_t ppool[4];
+    char name[SYMBOL_LENGTH];
     uds_msg sid;
 
 };
@@ -74,9 +122,18 @@ static int spi_shm_open(lmice_shm_t* shm, const char* name, int name_size, int s
     return ret;
 }
 
+typedef void(*psig_handler)(int);
+//psig_handler sigint_handler = NULL;
+//psig_handler sigterm_handler = NULL;
+
 void spi_signal_handler(int sig) {
-    if(sig == SIGTERM || sig == SIGINT)
+    if(sig == SIGTERM ) {
         quit_flag = 1;
+        //sigint_handler(sig);
+    } else if(sig == SIGINT) {
+        quit_flag = 1;
+        //sigterm_handler(sig);
+    }
 }
 
 
@@ -124,8 +181,14 @@ void* spi_thread(void* priv) {
                             if(ps->callback) {
                                 ps->callback(ps->symbol, addr, sd->size);
                             }
+                            if(p->pthis && ps->pcall) {
+                                (p->pthis->*ps->pcall)(ps->symbol, addr, sd->size);
+                            }
                             if(p->callback) {
                                 p->callback(ps->symbol, addr, sd->size);
+                            }
+                            if(p->pthis && p->pcall) {
+                                (p->pthis->*p->pcall)(ps->symbol, addr, sd->size);
                             }
                             break;
                         } else {
@@ -150,16 +213,16 @@ void* spi_thread(void* priv) {
     return NULL;
 }
 
-CLMSpi::CLMSpi(const char *name)
-    :m_name(name)
+CLMSpi::CLMSpi(const char *name, int poolsize)
 {
     int ret;
     // create private resource
     spi_private* p = new spi_private;
     memset(p, 0, sizeof(spi_private));
     m_priv = (void*) p;
-    uds_msg* sid = &p->sid;
+    uds_msg* sid = &p->sid;    
 
+    //Init uds client
     ret = init_uds_client(SOCK_FILE, sid);
     if(ret != 0) {
         exit(ret);
@@ -186,7 +249,6 @@ CLMSpi::CLMSpi(const char *name)
     sid->size = sizeof(lmice_register_t);
     memset(reg->symbol, 0, SYMBOL_LENGTH);
     strncpy(reg->symbol,name, strlen(name)>SYMBOL_LENGTH-1?SYMBOL_LENGTH-1:strlen(name));
-
     ret = send_uds_msg(sid);
     if(ret == 0 ) {
         lmice_critical_print("Register model[%s] ...\n", name);
@@ -198,7 +260,8 @@ CLMSpi::CLMSpi(const char *name)
         exit(ret);
     }
 
-    //Init spi
+    //Init spi by local_un
+    memcpy(p->name, reg->symbol, SYMBOL_LENGTH);
     uint64_t hval;
     hval = eal_hash64_fnv1a(&sid->local_un, SUN_LEN(&sid->local_un));
 
@@ -225,16 +288,17 @@ CLMSpi::CLMSpi(const char *name)
         exit(ret);
     }
 
-    /* run in other thread */
-    logging("LMice client[ %s ] running %d:%d", m_name.c_str(), getuid(), getpid());
+    /* running and create event thread */
+    logging("LMice client[ %s ] running %d:%d...", p->name, getuid(), getpid());
     pthread_create(&p->pt, NULL, spi_thread, m_priv);
 
 }
 
 CLMSpi::~CLMSpi()
 {
-    logging("LMice %s stopped.\n\n", m_name.c_str());
     spi_private* p = (spi_private*)m_priv;
+    logging("LMice client[ %s ] stopped %d:%d.\n\n", p->name, getuid(), getpid());
+
     p->quit_flag = 1;
     pthread_join(p->pt, NULL);
     finit_uds_msg(&p->sid);
@@ -242,7 +306,8 @@ CLMSpi::~CLMSpi()
 
 void CLMSpi::logging(const char* format, ...) {
     va_list argptr;
-    uds_msg* sid = &((spi_private*)m_priv)->sid;
+    spi_private* p = (spi_private*)m_priv;
+    uds_msg* sid = &p->sid;
     lmice_trace_info_t* info = (lmice_trace_info_t*)sid->data;
 
     UPDATE_INFO(info);
@@ -773,7 +838,7 @@ static uint64_t code_from_symbol(const char* symbol) {
     return hval;
 }
 
-int CLMSpi::register_callback(symbol_callback func, const char* symbol)
+int CLMSpi::register_callback(symbol_callback func, const char* symbol, void *udata)
 {
     spi_private* p =(spi_private*)m_priv;
     if(symbol == NULL) {
@@ -797,10 +862,44 @@ int CLMSpi::register_callback(symbol_callback func, const char* symbol)
     return 0;
 }
 
+int CLMSpi::register_cb(csymbol_callback func, const char *symbol)
+{
+    spi_private* p =(spi_private*)m_priv;
+    if(symbol == NULL) {
+        p->pthis = this;
+        p->pcall = func;
+    } else {
+        if(strlen(symbol) >= SYMBOL_LENGTH) {
+            lmice_error_print("Symbol is too long.\n");
+            return -1;
+        }
+        uint64_t hval = code_from_symbol(symbol);
+        for(size_t j=0; j<p->shmcount; ++j) {
+            spi_shm_t* ps = &p->shmlist[j];
+            if(hval == ps->hval && ps->type & CLIENT_SUBSYM) {
+                p->pthis  = this;
+                ps->pcall = func;
+                break;
+            }
+        } /* for-j: shmcount */
+
+    }
+
+    return 0;
+}
+
+
 int CLMSpi::join()
 {
     spi_private* p =(spi_private*)m_priv;
     return pthread_join(p->pt, NULL);
+}
+
+int CLMSpi::quit()
+{
+    spi_private* p =(spi_private*)m_priv;
+    p->quit_flag = 1;
+    return 0;
 }
 
 int CLMSpi::isquit()

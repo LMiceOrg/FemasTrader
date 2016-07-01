@@ -1,3 +1,4 @@
+#include <errno.h>
 #ifdef SHENGLI_WINDOWS
 
 #else
@@ -15,11 +16,12 @@
 
 #endif
 
+#include <errno.h>
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <assert.h>
-#include <errno.h>
+
 
 #include "socket_multicast.h"
 using std::cout;
