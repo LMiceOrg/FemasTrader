@@ -13,6 +13,7 @@ ELSE()
 ENDIF()
 
 INCLUDE_DIRECTORIES(.
+    app/lmiced
     eal
     lib/FemasAPIv2/linux64/include
     lib/libbson/include)
@@ -136,3 +137,26 @@ add_executable(demomodel ${demo_SRC})
 target_link_libraries(demomodel model_static eal_static pthread rt ${femasmd_libs} ${bson_libs})
 add_dependencies(demomodel model_static)
 add_dependencies(demomodel eal_static)
+
+#Add demo model
+LIST(APPEND rb1610_SRC app/lmiced/rb1610.cpp
+)
+
+add_executable(rb1610 ${rb1610_SRC})
+target_link_libraries(rb1610 model_static eal_static pthread rt ${femasmd_libs} ${bson_libs})
+add_dependencies(rb1610 model_static)
+add_dependencies(rb1610 eal_static)
+
+
+#Add SW guava md model
+LIST(APPEND guavasw_SRC app/guavasw/guava_demo.cpp
+    app/guavasw/guava_quote.cpp
+    app/guavasw/guavasw.cpp
+    app/guavasw/profile.cpp
+    app/guavasw/socket_multicast.cpp )
+
+add_executable(guavasw ${guavasw_SRC})
+target_link_libraries(guavasw model_static eal_static pthread rt ${femasmd_libs} ${bson_libs})
+add_dependencies(guavasw model_static)
+add_dependencies(guavasw eal_static)
+
