@@ -14,21 +14,19 @@ uint32_t eal_bf_rshash (const unsigned char* str, uint32_t len) {
     }
     return hash;
 }
-/* End Of RS Hash Function */
+/* End Of RS(Robert Sedgwicks) Hash Function */
 
 uint32_t eal_bf_jshash (const unsigned char* str, uint32_t len) {
-    unsigned int b = 378551;
-    unsigned int a = 63689;
-    unsigned int hash = 0;
-    unsigned int i = 0;
-
-    for(i=0; i<len; str++, i++) {
-        hash = hash*a + (*str);
-        a = a*b;
+    uint32_t hash = 1315423911;
+    unsigned int* ch;
+    for(i=0; i<len/4; ++i)
+    {
+        ch = (unsigned int*)str + i;
+        hash ^= ((hash << 5) + ch + (hash >> 2));
     }
     return hash;
 }
-/* End Of JS Hash Function */
+/* End Of JS(Justin Sobel) Hash Function */
 
 
 unsigned int eal_bf_pjwhash(const unsigned char* str, unsigned int len)
@@ -374,5 +372,14 @@ int eal_bf_add(lm_bloomfilter_t *bf, const eal_bf_hash_val *val)
         vector[n/8] |= (1<<n%8);
     }
 
+    return 0;
+}
+
+
+int eal_bf_key(lm_bloomfilter_t *bf, const unsigned char *ctx, uint32_t size, eal_bf_hash_val *val)
+{
+    int i=0;
+    for(i=0; i< bf->k; ++i)
+        (*val)[i] = eal_bf_hash_list[i](ctx, size);
     return 0;
 }

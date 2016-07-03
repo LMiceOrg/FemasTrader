@@ -73,8 +73,11 @@ int init_uds_server(const char* srv_name, struct uds_msg* msg) {
 int init_uds_client(const char* srv_name, struct uds_msg* msg) {
     int fd;
     char cli_name[64] = {0};
-    sprintf(cli_name, "/run/user/%d/lmiced_cli_XXXXXX", getuid());
+    sprintf(cli_name, "/run/user/%d/lmiced_cli_XXXXXX", geteuid());
     fd = mkstemp(cli_name);
+    if(fd == -1) {
+        return errno;
+    }
 
     memset(msg, 0, sizeof(struct uds_msg));
 

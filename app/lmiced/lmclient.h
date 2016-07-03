@@ -71,8 +71,8 @@ int lm_clientlist_maintain(clientlist_t* cl);
 
 /* Utilities */
 int lm_clientlist_find_or_create(clientlist_t* cl, struct sockaddr_un* addr, client_t** ppc);
-int lm_clientlist_find(clientlist_t* cl, struct sockaddr_un* addr, client_t** ppc);
-
+int lm_clientlist_find(clientlist_t* sl, struct sockaddr_un* addr, client_t** ppc);
+int lm_clientlist_find_pid(clientlist_t* sl, pid_t pid, client_t** ppc);
 /* Publish/subscribe symbol */
 int lm_client_pub(client_t* cli, pubsub_shm_t* ps, const char* symbol);
 int lm_client_sub(client_t* cli, pubsub_shm_t* ps, const char* symbol);

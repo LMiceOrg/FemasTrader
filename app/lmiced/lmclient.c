@@ -226,6 +226,32 @@ int lm_clientlist_find(clientlist_t *sl, struct sockaddr_un *addr, client_t **pp
     return 0;
 }
 
+int lm_clientlist_find_pid(clientlist_t *sl, pid_t pid, client_t **ppc)
+{
+    client_t * ps = NULL;
+    clientlist_t* cur = sl;
+    size_t i;
+
+    eal_spin_lock(&sl->lock);
+    do {
+        for(i=0; i<cur->count; ++i) {
+            if(cur->cli[i].pid == pid) {
+                ps = &cur->cli[i];
+                /* Find it */
+                break;
+            }
+        }
+
+        cur = cur->next;
+    }while(cur != NULL && ps == NULL);
+    eal_spin_unlock(&sl->lock);
+
+    *ppc = ps;
+
+    return 0;
+
+}
+
 
 int lm_client_pub(client_t *cli, pubsub_shm_t *ps, const char *symbol)
 {
@@ -261,8 +287,8 @@ int lm_client_unpub(client_t *cli, pubsub_shm_t *ps, const char *symbol)
         if( (ps && ps->hval == sym->ps->hval) ||
             (!ps && memcmp(symbol, sym->symbol, SYMBOL_LENGTH) == 0) ) {
             if(sym->type & SHM_PUB_TYPE) {
-                sym->ps->type &= SHM_SUB_TYPE;
-                sym->type &= SHM_SUB_TYPE;
+                sym->ps->type &= (~SHM_PUB_TYPE);
+                sym->type &= (~SHM_PUB_TYPE);
             }
 
             /* Recover symbol */
@@ -408,3 +434,5 @@ int lm_clientlist_maintain(clientlist_t *cl)
     eal_spin_unlock(&cl->lock);
     return 0;
 }
+
+

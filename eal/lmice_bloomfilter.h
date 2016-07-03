@@ -52,6 +52,7 @@ int eal_bf_calculate(uint64_t n, double f, uint32_t* m, uint32_t* k, double *rf)
  */
 int eal_bf_value(const unsigned char* ctx, uint32_t size, eal_bf_hash_val* val);
 
+int eal_bf_key(lm_bloomfilter_t* bf, const unsigned char* ctx, uint32_t size, eal_bf_hash_val* val);
 
 /**
  * @brief eal_bf_find: find bloomfilter

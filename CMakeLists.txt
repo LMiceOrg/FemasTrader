@@ -160,3 +160,10 @@ target_link_libraries(guavasw model_static eal_static pthread rt ${femasmd_libs}
 add_dependencies(guavasw model_static)
 add_dependencies(guavasw eal_static)
 
+#Add Net md model
+LIST(APPEND netmd_SRC app/netmd/netmd.c
+)
+add_executable(netmd ${netmd_SRC})
+target_link_libraries(netmd model_static eal_static pthread rt pcap )
+add_dependencies(netmd model_static)
+add_dependencies(netmd eal_static)

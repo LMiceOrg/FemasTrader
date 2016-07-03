@@ -13,6 +13,16 @@
 
 #define BOARD_NAME "LMiced V1.0"
 
+/** SERVER BOARD
+ *  |0          ...     1023|
+ *   Server event list [pub, reg, log]
+ *  |1024       ...     2047|
+ *   Server publish list
+ *  |2048       ...     3071|
+ *   Server symbol list
+ *  |3072       ...     4095|
+ *   Server logging list
+ */
 enum symbol_client_e{
     CLIENT_SUBSYM = 2,
     CLIENT_PUBSYM = 4,
@@ -20,10 +30,16 @@ enum symbol_client_e{
 
 
     CLIENT_SUBPOS = 1024,
+
     MAINTAIN_PERIOD = 30,
     SERVER_PUBPOS = 1024,
     SERVER_EVTPOS = 0,
     PUBLIST_LENGTH = 64,
+
+    SERVER_SYMPOS = 2048,
+    SYMLIST_LENGTH = 18,
+
+    SERVER_LOGPOS = 3072
 };
 
 enum lmice_spi_type_e {
@@ -83,6 +99,22 @@ struct lmice_pub_data_s {
     pub_detail_t pub[1];
 };
 typedef struct lmice_pub_data_s lmice_pub_data_t;
+
+typedef struct _lmice_symbol_detail_t {
+    uint64_t  hval;     /* ID of symbol resource */
+    pid_t     pid;      /* ID of client */
+    int32_t   size;     /* data size in bytes */
+    int32_t   count;    /* ring length */
+    int32_t   type;     /* pub or sub */
+    char symbol[SYMBOL_LENGTH]; /* resource name */
+} lmice_symbol_detail_t;
+
+typedef struct _lmice_symbol_data_t {
+    int64_t lock;
+    int32_t padding;
+    int32_t count;
+    lmice_symbol_detail_t sym[1];
+}lmice_symbol_data_t;
 
 
 struct lmice_data_detail_s {

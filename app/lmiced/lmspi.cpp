@@ -108,7 +108,7 @@ struct spi_private {
         (info)->tid = eal_gettid(); \
     } while(0)
 
-volatile int quit_flag = 0;
+static volatile int quit_flag = 0;
 
 static int spi_shm_open(lmice_shm_t* shm, const char* name, int name_size, int shm_size) {
     int ret;
@@ -122,17 +122,15 @@ static int spi_shm_open(lmice_shm_t* shm, const char* name, int name_size, int s
     return ret;
 }
 
-typedef void(*psig_handler)(int);
-//psig_handler sigint_handler = NULL;
-//psig_handler sigterm_handler = NULL;
+//sig_t sigint_handler = NULL;
+sig_t sigterm_handler = NULL;
 
 void spi_signal_handler(int sig) {
-    if(sig == SIGTERM ) {
+    if(sig == SIGTERM ||sig == SIGINT) {
         quit_flag = 1;
-        //sigint_handler(sig);
-    } else if(sig == SIGINT) {
-        quit_flag = 1;
-        //sigterm_handler(sig);
+        if(sigterm_handler) {
+            sigterm_handler(sig);
+        }
     }
 }
 
@@ -225,6 +223,7 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
     //Init uds client
     ret = init_uds_client(SOCK_FILE, sid);
     if(ret != 0) {
+        lmice_error_print("Can't init UDS client[%d].\n", ret);
         exit(ret);
     }
     lmice_register_t *reg = (lmice_register_t*)sid->data;
@@ -251,7 +250,7 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
     strncpy(reg->symbol,name, strlen(name)>SYMBOL_LENGTH-1?SYMBOL_LENGTH-1:strlen(name));
     ret = send_uds_msg(sid);
     if(ret == 0 ) {
-        lmice_critical_print("Register model[%s] ...\n", name);
+        lmice_critical_print("Register model[%s] in[%s]\n", name, sid->local_un.sun_path);
         usleep(10000);
     } else {
         int err = errno;
@@ -294,14 +293,26 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
 
 }
 
+
 CLMSpi::~CLMSpi()
 {
     spi_private* p = (spi_private*)m_priv;
     logging("LMice client[ %s ] stopped %d:%d.\n\n", p->name, getuid(), getpid());
 
     p->quit_flag = 1;
-    pthread_join(p->pt, NULL);
+    if(p->pt != 0) {
+        pthread_join(p->pt, NULL);
+    }
     finit_uds_msg(&p->sid);
+
+    eal_event_close(p->event.fd);
+    eal_shm_close(p->server.fd, p->server.addr);
+    eal_shm_close(p->board.fd, p->board.addr);
+    delete p;
+}
+
+void CLMSpi::register_signal(sig_t sigfunc) {
+    sigterm_handler = sigfunc;
 }
 
 void CLMSpi::logging(const char* format, ...) {
@@ -551,8 +562,11 @@ void CLMSpi::unsubscribe(const char *symbol)
 
 void CLMSpi::publish(const char *symbol)
 {
+    int ret;
     spi_private* p =(spi_private*)m_priv;
     uds_msg *sid = &p->sid;
+    lmice_symbol_data_t* pd = (lmice_symbol_data_t*)((char*)p->server.addr+SERVER_SYMPOS);
+    evtfd_t efd = (evtfd_t)((char*)p->server.addr+SERVER_EVTPOS+sizeof(sem_t));
 
     if(p->shmcount >= CLIENT_SPCNT) {
         lmice_error_print("Sub/pub resource is full\n");
@@ -563,11 +577,11 @@ void CLMSpi::publish(const char *symbol)
         return;
     }
     char sym[SYMBOL_LENGTH] = {0};
-    char name[SYMBOL_LENGTH] ={0};
+
     uint64_t hval;
     strcpy(sym, symbol);
     hval = eal_hash64_fnv1a(sym, SYMBOL_LENGTH);
-    eal_shm_hash_name(hval, name);
+
 
     spi_shm_t*ps = NULL;
     lmice_shm_t*shm;
@@ -592,17 +606,93 @@ void CLMSpi::publish(const char *symbol)
         ps->type |= SHM_PUB_TYPE;
         memcpy(ps->symbol, sym, SYMBOL_LENGTH);
         memset(shm, 0, sizeof(lmice_shm_t) );
-        memcpy(shm->name, name, SYMBOL_LENGTH);
+        eal_shm_hash_name(hval, shm->name);
         ++p->shmcount;
     }
 
+    //Try awake lmiced with event
+    bool sended = false;
+    ret = eal_spin_trylock(&pd->lock);
+    if( ret == 0) {
+        if(pd->count < PUBLIST_LENGTH) {
+            lmice_symbol_detail_t *dt = pd->sym + pd->count;
+            dt->hval= hval;
+            dt->pid = getpid();
+            dt->type = EM_LMICE_PUB_TYPE;
+            memcpy(dt->symbol, sym, SYMBOL_LENGTH);
+            ++pd->count;
+            sended = true;
+        }
+        eal_spin_unlock(&pd->lock);
+    }
 
-    sid->size = sizeof(lmice_pub_t);
-    lmice_pub_t *pp = (lmice_pub_t *)sid->data;
-    lmice_trace_info_t *pinfo = &pp->info;
+    if(sended) {
+        ret = eal_event_awake( efd );
+    } else {
+        /* Fall back to use UDS */
+        sid->size = sizeof(lmice_pub_t);
+        lmice_pub_t *pp = (lmice_pub_t *)sid->data;
+        lmice_trace_info_t *pinfo = &pp->info;
+        UPDATE_INFO(pinfo);
+        pinfo->type = EM_LMICE_PUB_TYPE;
+        memcpy(pp->symbol, sym, SYMBOL_LENGTH);
+        send_uds_msg(sid);
+    }
+}
+
+void CLMSpi::unpublish(const char *symbol)
+{
+    spi_private* p =(spi_private*)m_priv;
+    uds_msg* sid = &p->sid;
+
+    if(p->shmcount == 0) {
+        lmice_error_print("pub resource is empty.\n");
+        return;
+    }
+    if(strlen(symbol) >= SYMBOL_LENGTH) {
+        lmice_error_print("Ubpublish symbol is too long.\n");
+        return;
+    }
+    char sym[SYMBOL_LENGTH] = {0};
+    char name[SYMBOL_LENGTH] ={0};
+    uint64_t hval;
+    strcpy(sym, symbol);
+    hval = eal_hash64_fnv1a(sym, SYMBOL_LENGTH);
+    eal_shm_hash_name(hval, name);
+
+    spi_shm_t*ps = NULL;
+    lmice_shm_t*shm;
+    for(size_t i=0; i< p->shmcount; ++i) {
+        ps = &p->shmlist[i];
+        shm = &ps->shm;
+        if(ps->type & SHM_PUB_TYPE && ps->hval == hval) {
+            ps->type &= (~SHM_PUB_TYPE);
+            if(ps->type == 0) {
+                if(shm->fd != 0 && shm->addr != 0) {
+                    /* Close shm */
+                    eal_shm_close(shm->fd, shm->addr);
+                }
+                memmove(ps, ps+1, (p->shmcount-i-1)*sizeof(spi_shm_t));
+                --p->shmcount;
+            }
+            break;
+
+        }
+
+        ps = NULL;
+
+    }
+
+    if(!ps)
+        return;
+
+    sid->size = sizeof(lmice_unpub_t);
+    lmice_unpub_t *pb = (lmice_unpub_t *)sid->data;
+    lmice_trace_info_t *pinfo = &pb->info;
+
     UPDATE_INFO(pinfo);
-    pinfo->type = EM_LMICE_PUB_TYPE;
-    memcpy(pp->symbol, sym, SYMBOL_LENGTH);
+    pinfo->type = EM_LMICE_UNSUB_TYPE;
+    memcpy(pb->symbol, sym, SYMBOL_LENGTH);
 
     send_uds_msg(sid);
 }
@@ -891,8 +981,11 @@ int CLMSpi::register_cb(csymbol_callback func, const char *symbol)
 
 int CLMSpi::join()
 {
+    int ret = 0;
     spi_private* p =(spi_private*)m_priv;
-    return pthread_join(p->pt, NULL);
+    ret = pthread_join(p->pt, NULL);
+    p->pt = 0;
+    return ret;
 }
 
 int CLMSpi::quit()
@@ -1013,3 +1106,102 @@ int CLMSpi::isquit()
 //}
 
 
+/** Implementation of the C api interface */
+
+lmspi_t lmspi_create(const char* name, int poolsize) {
+    CLMSpi * pt = new CLMSpi(name , poolsize);
+    return (lmspi_t)pt;
+}
+
+void lmspi_delete(lmspi_t spi) {
+    CLMSpi * pt = (CLMSpi *)spi;
+    delete pt;
+}
+
+int lmspi_publish(lmspi_t spi, const char* symbol) {
+    CLMSpi * pt = (CLMSpi *)spi;
+
+    pt->publish(symbol);
+
+    return 0;
+}
+
+int lmspi_subscribe(lmspi_t spi, const char* symbol) {
+    CLMSpi * pt = (CLMSpi *)spi;
+
+    pt->subscribe(symbol);
+
+    return 0;
+}
+
+int lmspi_unpublish(lmspi_t spi, const char* symbol) {
+    CLMSpi * pt = (CLMSpi *)spi;
+
+    pt->unsubscribe(symbol);
+
+    return 0;
+}
+
+int lmspi_unsubscribe(lmspi_t spi, const char* symbol) {
+    CLMSpi * pt = (CLMSpi *)spi;
+
+    pt->unpublish(symbol);
+
+    return 0;
+}
+
+int lmspi_register_recv(lmspi_t spi, const char* symbol, symbol_callback *callback) {
+    CLMSpi * pt = (CLMSpi *)spi;
+    int ret;
+
+    ret = pt->register_callback(*callback, symbol, NULL);
+    return ret;
+}
+
+int lmspi_unregister_recv(lmspi_t spi, const char* symbol) {
+    CLMSpi * pt = (CLMSpi *)spi;
+    int ret;
+
+    ret = pt->register_callback(NULL, symbol, NULL);
+    return ret;
+}
+
+
+int lmspi_join(lmspi_t spi) {
+    CLMSpi * pt = (CLMSpi *)spi;
+    int ret;
+
+    ret = pt->join();
+
+    return ret;
+}
+
+void lmspi_quit(lmspi_t spi) {
+    CLMSpi * pt = (CLMSpi *)spi;
+    pt->quit();
+
+}
+
+void lmspi_logging(lmspi_t spi, const char* format, ...) {
+    CLMSpi * pt = (CLMSpi *)spi;
+    va_list argptr;
+    char buf[512]={0};
+
+    va_start(argptr, format);
+    vsnprintf(buf, 511, format, argptr);
+    va_end(argptr);
+
+    pt->logging(buf);
+}
+
+void lmspi_send(lmspi_t spi, const char* symbol, const void* addr, int len) {
+    CLMSpi * pt = (CLMSpi *)spi;
+
+    pt->send(symbol, addr, len);
+
+}
+
+void lmspi_signal(lmspi_t spi, sig_t sigfunc) {
+    CLMSpi * pt = (CLMSpi *)spi;
+    pt->register_signal(sigfunc);
+}
