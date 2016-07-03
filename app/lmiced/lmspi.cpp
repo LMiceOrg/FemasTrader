@@ -1289,7 +1289,7 @@ int lmspi_unregister_recv(lmspi_t spi, const char* symbol) {
     CLMSpi * pt = (CLMSpi *)spi;
     int ret;
 
-    ret = pt->register_callback(NULL, symbol, NULL);
+    ret = pt->register_callback(NULL, symbol);
     return ret;
 }
 

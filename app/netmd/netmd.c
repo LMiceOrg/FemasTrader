@@ -61,8 +61,6 @@ void netmd_bf_create(void) {
     bflter->k = k;
     bflter->addr = (char*)bflter+ sizeof(lm_bloomfilter_t);
 
-
-    return 0;
 }
 
 void netmd_bf_delete(void) {
