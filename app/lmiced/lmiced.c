@@ -286,6 +286,9 @@ void* event_thread(void* p);
 /* server symbol event thread */
 void* symbol_event_thread(void* ptr);
 
+/* server register event thread */
+void* register_event_thread(void* ptr);
+
 void signal_handler(int sig) {
     if(sig == SIGTERM)
         g_quit_flag = 1;
@@ -335,6 +338,9 @@ int main(int argc, char* argv[]) {
     /* Create symbol thread */
     pthread_create(&pt[1], NULL, symbol_event_thread, &g_server);
 
+    /* Create register thread */
+    pthread_create(&pt[2], NULL, register_event_thread, &g_server);
+
     /* Listen and wait signal to end */
     /*signal(SIGCHLD,SIG_IGN);  ignore child */
     /* signal(SIGTSTP,SIG_IGN);  ignore tty signals */
@@ -353,6 +359,7 @@ int main(int argc, char* argv[]) {
     lmice_info_log("LMice server stopping...\n");
     pthread_join(pt[0], NULL);
     pthread_join(pt[1], NULL);
+    pthread_join(pt[2], NULL);
     ret=0;
     ret |= finit_uds_msg(g_server.pmsg);
     ret |= eal_shm_destroy(&g_server.board);
@@ -507,26 +514,33 @@ int init_epoll(int sfd) {
                             client_t* cli = NULL;
                             /* Register client */
                             int ret = 0;
-                            lmice_info_log("Client[%s] register in [%s]...\n", reg->symbol, msg.remote_un.sun_path);
                             /* Find or create client */
-                            ret = lm_clientlist_register(ser->clilist, info->tid, info->pid, reg->symbol, &msg.remote_un);
-
-                            /* Send state to client */
+                            ret = lm_clientlist_register(ser->clilist, info->tid, info->pid, reg->symbol, &msg.remote_un, &cli);
                             if(ret == 0) {
-                                lm_clientlist_find(ser->clilist, &msg.remote_un, &cli);
-                                if(cli) {
-                                    lmice_trace_info_t* pc = (lmice_trace_info_t*)cli->board.addr;
-                                    pc->tid = info->tid;
-                                    pc->pid = info->pid;
-                                    lmice_info_log("Client[%s] joined at [%s], evt[%s], board[%s].\n",
-                                                   reg->symbol, msg.remote_un.sun_path,
-                                                   cli->event.name, cli->board.name);
-                                }
+                                lmice_info_log("Client[%s] joined at [%s], evt[%s], board[%s].\n",
+                                               reg->symbol, msg.remote_un.sun_path,
+                                               cli->event.name, cli->board.name);
+
                             } else {
                                 lmice_error_log("Failed to register client[%s] as [%d]\n", msg.remote_un.sun_path, ret);
                             }
                             break;
 
+                        }
+                        case EM_LMICE_UNREGCLIENT_TYPE:
+                        {
+                            int ret;
+                            server_t* ser=&g_server;
+                            client_t* cli = NULL;
+                            ret = lm_clientlist_unregister(ser->clilist, &msg.remote_un, &cli);
+                            if(ret == 0 && cli) {
+                                lmice_info_log("Client[%s] leaved at [%s] pid[%d], board[%s].\n",
+                                               cli->name, cli->addr.sun_path,
+                                               cli->pid, cli->board.name);
+                            } else {
+                                lmice_error_log("Failed to unregister client[%s] as [%d]\n", msg.remote_un.sun_path, ret);
+                            }
+                            break;
                         }
                         case EM_LMICE_SUB_TYPE:
                         {
@@ -663,7 +677,7 @@ int init_epoll(int sfd) {
                                             /* Add */
                                             lmice_sub_data_t* dt = (lmice_sub_data_t*)((char*)cli->board.addr + CLIENT_SUBPOS);
                                             eal_spin_lock(&dt->lock);
-                                            if(dt->count<CLIENT_SPCNT) {
+                                            if(dt->count<= CLIENT_SPCNT) {
                                                 sub_detail_t* sd = dt->sub + dt->count;
                                                 memcpy(sd, &pb->sub, sizeof(sub_detail_t));
                                                 ++dt->count;
@@ -721,11 +735,86 @@ int init_epoll(int sfd) {
 
 
 }
+void* register_event_thread(void* ptr) {
+    int ret;
+    int cnt;
+    int i;
+    server_t *ser = (server_t*)ptr;
+    evtfd_t efd = (evtfd_t)((char*)ser->board.addr+ SERVER_REGEVT);
+    lmice_register_data_t* pd = (lmice_register_data_t*)((char*)ser->board.addr+SERVER_REGPOS);
+    lmice_register_detail_t pdlist[REGLIST_LENGTH];
+
+    ret = eal_eventp_init(efd);
+    if(ret != 0)
+        return NULL;
+
+    lmice_info_log("Begin register event thread\n");
+    for(;;) {
+        /* Wait and timeout set to 100 ms */
+        ret = eal_event_wait_timed(efd, 100);
+
+        /* Check quit flag */
+        if(g_quit_flag == 1)
+            break;
+
+        /* Time out */
+        if(ret == -1 && errno == ETIMEDOUT)
+            continue;
+
+        /* Check register message */
+        eal_spin_lock(&pd->lock);
+        cnt = pd->count;
+        if(cnt >0 && cnt <= REGLIST_LENGTH) {
+            memcpy(pdlist, pd->reg, cnt*sizeof(lmice_register_detail_t));
+            pd->count = 0;
+        } else if(cnt > REGLIST_LENGTH) { /* error we have */
+            cnt = 0;
+            pd->count = 0;
+        }
+        eal_spin_unlock(&pd->lock);
+        /* Process message */
+        for(i=0; i<cnt; ++i) {
+            client_t* cli = NULL;
+            lmice_register_detail_t* detail = pdlist+i;
+            switch(detail->type) {
+            case EM_LMICE_REGCLIENT_TYPE:
+                /* Find or create client */
+                ret = lm_clientlist_register(ser->clilist, detail->tid, detail->pid, detail->symbol, &detail->un, &cli);
+                if(ret == 0 && cli) {
+                    lmice_info_log("Client[%s] joined at [%s], pid[%d], board[%s].\n",
+                                   cli->name, cli->addr.sun_path,
+                                   cli->pid, cli->board.name);
+
+                } else {
+                    lmice_error_log("Failed to register client[%s] as [%d]\n", detail->un.sun_path, ret);
+                }
+                break;
+            case EM_LMICE_UNREGCLIENT_TYPE:
+                ret = lm_clientlist_unregister(ser->clilist, &detail->un, &cli);
+                if(ret == 0 && cli) {
+                    lmice_info_log("Client[%s] leaved at [%s] pid[%d], board[%s].\n",
+                                   cli->name, cli->addr.sun_path,
+                                   cli->pid, cli->board.name);
+                } else {
+                    lmice_error_log("Failed to unregister client[%s] as [%d]\n", detail->un.sun_path, ret);
+                }
+                break;
+            default:
+                break;
+            } /*end-switch: type*/
+
+        }/*end-for:i*/
+
+    }/* end-for:endless-loop */
+
+    eal_eventp_close(efd);
+    return NULL;
+}
 
 void* symbol_event_thread(void* ptr) {
     int ret;
     server_t *ser = (server_t*)ptr;
-    evtfd_t efd = (evtfd_t)((char*)ser->board.addr+SERVER_EVTPOS+sizeof(sem_t));
+    evtfd_t efd = (evtfd_t)((char*)ser->board.addr+SERVER_EVTPOS + SERVER_SYMEVT);
     lmice_symbol_data_t* sym = (lmice_symbol_data_t*)((char*)ser->board.addr+SERVER_SYMPOS);
     lmice_symbol_detail_t symlist[SYMLIST_LENGTH];
 
@@ -777,19 +866,31 @@ void* symbol_event_thread(void* ptr) {
                 ret = lm_shmlist_sub(ser->shmlist, pd->hval, &ps);
                 if(ret == 0) {
                     ret = lm_client_sub(cli, ps, pd->symbol);
+                    if(ret == 0) {
+                        lmice_info_log("Subscribe[%s] successed [%s][%d]", pd->symbol, cli->name, pd->pid);
+                    }
                 }
                 break;
             case EM_LMICE_UNSUB_TYPE:
                 ret = lm_client_unsub(cli, NULL, pd->symbol);
+                if(ret == 0) {
+                    lmice_info_log("Unsubscribe[%s] successed [%s][%d]", pd->symbol, cli->name, pd->pid);
+                }
                 break;
             case EM_LMICE_PUB_TYPE:
                 ret = lm_shmlist_pub(ser->shmlist, pd->hval, &ps);
                 if(ret == 0) {
                     ret = lm_client_pub(cli, ps, pd->symbol);
+                    if(ret == 0) {
+                        lmice_info_log("Publish[%s] successed [%s][%d]", pd->symbol, cli->name, pd->pid);
+                    }
                 }
                 break;
             case EM_LMICE_UNPUB_TYPE:
                 ret = lm_client_unpub(cli, NULL, pd->symbol);
+                if(ret == 0) {
+                    lmice_info_log("Unpublish[%s] successed [%s][%d]", pd->symbol, cli->name, pd->pid);
+                }
                 break;
             default:
                 break;
@@ -857,7 +958,7 @@ void* event_thread(void* ptr) {
 
                         lmice_sub_data_t* dt = (lmice_sub_data_t*)((char*)cli->board.addr + CLIENT_SUBPOS);
                         eal_spin_lock(&dt->lock);
-                        if(dt->count<CLIENT_SPCNT) {
+                        if(dt->count<= CLIENT_SPCNT) {
                             sub_detail_t* sd = dt->sub + dt->count;
                             memcpy(sd, publist+ipub, sizeof(pub_detail_t));
                             ++dt->count;

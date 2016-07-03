@@ -6,6 +6,7 @@
 
 #include "lmice_trace.h"
 #include "lmice_eal_shm.h"
+#include "lmice_eal_thread.h"
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -14,33 +15,46 @@
 #define BOARD_NAME "LMiced V1.0"
 
 /** SERVER BOARD
- *  |0          ...     1023|
- *   Server event list [pub, reg, log]
- *  |1024       ...     2047|
- *   Server publish list
- *  |2048       ...     3071|
- *   Server symbol list
- *  |3072       ...     4095|
- *   Server logging list
+ *  |0                  ...                 1023|
+ *   Server event list [pub, sym, reg]
+ *  |1024               ...                 2047|
+ *   Server publish list[PUBLIST_LENGTH]
+ *  |2048               ...                 3071|
+ *   Server symbol list[SYMLIST_LENGTH]
+ *  |3072               ...                 4095|
+ *   Server register list[REGLIST_LENGTH]
  */
 enum symbol_client_e{
     CLIENT_SUBSYM = 2,
     CLIENT_PUBSYM = 4,
-    CLIENT_BOARD = 4*1024,  /* 8KB */
+    CLIENT_BOARD = 4*1024,  /* 4KB for board */
 
 
+    CLIENT_EVTPOS = 0,
     CLIENT_SUBPOS = 1024,
+    SUBLIST_LENGTH = 64,
 
     MAINTAIN_PERIOD = 30,
-    SERVER_PUBPOS = 1024,
+
     SERVER_EVTPOS = 0,
+    SERVER_PUBPOS = 1024,
     PUBLIST_LENGTH = 64,
 
     SERVER_SYMPOS = 2048,
     SYMLIST_LENGTH = 18,
+    SERVER_SYMEVT = 1*sizeof(sem_t),
 
-    SERVER_LOGPOS = 3072
+    SERVER_REGPOS = 3072,
+    REGLIST_LENGTH = 5,
+    SERVER_REGEVT = 2*sizeof(sem_t),
 };
+
+/** CLIENT BOARD
+ *  |0                  ...                 1023|
+ *   Client event list[sub]
+ *  |1024               ...                 2047|
+ *   Client subscribe list[SUBLIST_LENGTH]
+ */
 
 enum lmice_spi_type_e {
     EM_LMICE_TRACE_TYPE=1,
@@ -51,6 +65,7 @@ enum lmice_spi_type_e {
     EM_LMICE_UNPUB_TYPE,
     EM_LMICE_SEND_DATA,
     EM_LMICE_REGCLIENT_TYPE,
+    EM_LMICE_UNREGCLIENT_TYPE,
 };
 
 typedef  struct {
@@ -66,18 +81,13 @@ typedef lmice_sub_t lmice_pub_t;
 
 typedef lmice_pub_t lmice_unpub_t;
 
-typedef struct {
+typedef struct sub_detail_s {
     uint32_t    pos;
     int32_t     size;
     uint64_t    hval;
 } sub_detail_t;
 
-struct pub_detail_s {
-    uint32_t    pos;
-    int32_t     size;
-    uint64_t    hval;
-};
-typedef struct pub_detail_s pub_detail_t;
+typedef sub_detail_t pub_detail_t;
 
 typedef struct {
     lmice_trace_info_t info;
@@ -85,20 +95,19 @@ typedef struct {
 } lmice_send_data_t;
 
 
-typedef struct {
+typedef struct lmice_sub_data_s {
     int64_t lock;
     uint32_t padding;
     uint32_t count;
     sub_detail_t sub[1];
 } lmice_sub_data_t;
 
-struct lmice_pub_data_s {
+typedef struct lmice_pub_data_s {
     int64_t lock;
     int32_t padding;
     int32_t count;
     pub_detail_t pub[1];
-};
-typedef struct lmice_pub_data_s lmice_pub_data_t;
+}lmice_pub_data_t;
 
 typedef struct _lmice_symbol_detail_t {
     uint64_t  hval;     /* ID of symbol resource */
@@ -116,6 +125,21 @@ typedef struct _lmice_symbol_data_t {
     lmice_symbol_detail_t sym[1];
 }lmice_symbol_data_t;
 
+typedef struct _lmice_register_detail_s {
+    char symbol[SYMBOL_LENGTH];   /* name of client, for display purpose */
+    struct sockaddr_un un;           /* key of client */
+    int16_t len;
+    int type;                   /* reg or unreg */
+    eal_pid_t pid;
+    eal_tid_t tid;
+}lmice_register_detail_t;
+
+typedef struct lmice_register_data_s {
+    int64_t lock;
+    int32_t padding;
+    int32_t count;
+    lmice_register_detail_t reg[1];
+} lmice_register_data_t;
 
 struct lmice_data_detail_s {
     int64_t lock;

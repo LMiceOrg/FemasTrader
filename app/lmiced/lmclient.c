@@ -25,7 +25,7 @@
         symbol_shm_t *ss = &cli->symshm[j]; \
         pubsub_shm_t *ps = ss->ps;  \
         if(ss->type & SHM_PUB_TYPE) {   \
-            ps->type &= SHM_SUB_TYPE;   \
+            ps->type &= (~SHM_PUB_TYPE);   \
         }   \
     }   \
 }while(0)
@@ -61,6 +61,8 @@ int lm_clientlist_delete(clientlist_t *cl)
         size_t i=0;
         for(i=0; i<cur->count; ++i) {
             client_t* cli = &cur->cli[i];
+            if(cli->active == CLIENT_DEAD)
+                continue;
 
             /* Terminate process */
             CLIENT_TERM_PROCESS(cli, ret);
@@ -84,29 +86,33 @@ int lm_clientlist_delete(clientlist_t *cl)
 }
 
 
-int lm_clientlist_register(clientlist_t *cl, pthread_t tid, pid_t pid, const char *name, struct sockaddr_un *addr)
+int lm_clientlist_register(clientlist_t *cl, pthread_t tid, pid_t pid, const char *name, struct sockaddr_un *addr, client_t **ppc)
 {
     int ret = 0;
     client_t* cli = NULL;
     ret = lm_clientlist_find_or_create(cl, addr, &cli);
     if(ret == 0 && cli != NULL) {
+        cli->active = CLIENT_ALIVE;
         cli->tid = tid;
         cli->pid = pid;
         memcpy(cli->name, name, SYMBOL_LENGTH);
+        *ppc = cli;
     }
     return ret;
 }
 
 
-int lm_clientlist_unregister(clientlist_t *cl, struct sockaddr_un *addr)
+int lm_clientlist_unregister(clientlist_t *cl, struct sockaddr_un *addr, client_t** ppc)
 {
     int ret =0;
     client_t* cli = NULL;
     ret = lm_clientlist_find(cl, addr, &cli);
     if(ret == 0 && cli != NULL) {
+        cli->active = CLIENT_DEAD;
         CLIENT_TERM_PROCESS(cli, ret);
         CLIENT_RECOVER_RESOURCE(cli, ret);
         CLIENT_RECOVER_PUB_RIGHT(cli);
+        *ppc = cli;
     }
     return ret;
 }
@@ -115,6 +121,7 @@ int lm_clientlist_unregister(clientlist_t *cl, struct sockaddr_un *addr)
 int lm_clientlist_find_or_create(clientlist_t *cl, struct sockaddr_un *addr, client_t **ppc)
 {
     int ret;
+    int newslot = 0;
     uint64_t hval;
     size_t i;
     clientlist_t* ncur = NULL;
@@ -130,14 +137,22 @@ int lm_clientlist_find_or_create(clientlist_t *cl, struct sockaddr_un *addr, cli
         if(cur->count < CLIENT_COUNT && ncli == NULL) {
             ncur = cur;
             ncli = &ncur->cli[ncur->count];
+            newslot = 1;
         }
 
         for(i=0; i<cur->count; ++i) {
             if(cur->cli[i].addr_len == addr_len &&
-                    memcmp(&(cur->cli[i].addr), addr, addr_len) == 0) {
+                    memcmp(&(cur->cli[i].addr), addr, addr_len) == 0 &&
+                    cur->cli[i].active == CLIENT_ALIVE ) {
                 cli = &cur->cli[i];
                 /* Find it */
                 break;
+            }
+            /* Find dead slot, may use it after */
+            if(cur->cli[i].active == CLIENT_DEAD) {
+                ncur = cur;
+                ncli = &cur->cli[i];
+                newslot = 0;
             }
         }
 
@@ -148,12 +163,14 @@ int lm_clientlist_find_or_create(clientlist_t *cl, struct sockaddr_un *addr, cli
                 cur->next = lm_clientlist_create();
                 ncur = cur->next;
                 ncli = ncur->cli;
+                newslot = 1;
             }
 
             /* Init client:IC */
             memset(ncli, 0, sizeof(client_t));
             memcpy(&ncli->addr, addr, addr_len);
             ncli->addr_len = addr_len;
+
 
             /* IC1: Create board shared memory */
             hval = eal_hash64_fnv1a(addr, addr_len);
@@ -168,7 +185,10 @@ int lm_clientlist_find_or_create(clientlist_t *cl, struct sockaddr_un *addr, cli
                     eal_event_hash_name(hval, ncli->event.name);
                     ret = eal_event_create(&ncli->event);
                     if(ret == 0) {
-                        ++ncur->count;
+                        if(newslot == 1) {
+                            ++ncur->count;
+                        }
+                        ncli->active = CLIENT_ALIVE;
                         cli = ncli;
                     } else {
                         lmice_error_log("IC3 create event[%s] failed[%d]", ncli->event.name, ret);
@@ -211,7 +231,9 @@ int lm_clientlist_find(clientlist_t *sl, struct sockaddr_un *addr, client_t **pp
         for(i=0; i<cur->count; ++i) {
             if(cur->cli[i].addr_len == addr_len &&
                     memcmp(&(cur->cli[i].addr), addr, addr_len) == 0) {
-                ps = &cur->cli[i];
+
+                if(cur->cli[i].active == CLIENT_ALIVE)
+                    ps = &cur->cli[i];
                 /* Find it */
                 break;
             }
@@ -236,7 +258,9 @@ int lm_clientlist_find_pid(clientlist_t *sl, pid_t pid, client_t **ppc)
     do {
         for(i=0; i<cur->count; ++i) {
             if(cur->cli[i].pid == pid) {
-                ps = &cur->cli[i];
+
+                if(cur->cli[i].active == CLIENT_ALIVE)
+                    ps = &cur->cli[i];
                 /* Find it */
                 break;
             }
@@ -392,18 +416,18 @@ int lm_clientlist_maintain(clientlist_t *cl)
 {
     int ret;
     int err;
-    ssize_t i;
+    uint32_t i;
     clientlist_t *cur = cl;
     ret = eal_spin_trylock(&cl->lock);
     if(ret != 0)
         return 0;
     do {
-        if(cur->count == 0)
-            break;
-        for(i= (ssize_t)cur->count -1; i>=0; --i) {
+        for(i= 0; i< cur->count; ++i) {
             client_t* cli = &cur->cli[i];
+            if(cli->active == CLIENT_DEAD)
+                continue;
             ret = kill(cli->pid, 0);
-            if(ret != 0) {
+            if(ret != 0) { /* the process is not exist, so kill failed */
                 size_t j;
                 err = errno;
                 lmice_critical_log("process[%u] open failed[%d]\n", cli->pid, err);
@@ -418,15 +442,10 @@ int lm_clientlist_maintain(clientlist_t *cl)
                     symbol_shm_t *ss = &cli->symshm[j];
                     pubsub_shm_t *ps = ss->ps;
                     if(ss->type & SHM_PUB_TYPE) {
-                        ps->type &= SHM_SUB_TYPE;
+                        ps->type &= (~SHM_PUB_TYPE);
                     }
                 }
                 lmice_critical_log("process[%u] remove pub state\n", cli->pid);
-                memmove(cli, cli+1, sizeof(client_t) * (cur->count-i-1) );
-                --cur->count;
-                if( i== 0)
-                    break;
-                continue;
             }
         }
         cur = cur->next;

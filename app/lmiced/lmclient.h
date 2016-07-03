@@ -19,6 +19,8 @@ enum client_e {
     SYMBOL_LENGTH = 32,
     CLIENT_COUNT = 64,
     BOARD_SHMSIZE = 4*1024,
+    CLIENT_ALIVE = 1,
+    CLIENT_DEAD = 0,
 };
 
 struct symbol_shm_s {
@@ -33,6 +35,7 @@ typedef struct symbol_shm_s symbol_shm_t;
 struct client_s {
     int64_t lock;
     eal_tid_t tid;
+    volatile int active;
     pid_t pid;
     char name[SYMBOL_LENGTH];
     lmice_event_t event;
@@ -63,8 +66,8 @@ clientlist_t* lm_clientlist_create();
 int lm_clientlist_delete(clientlist_t* cl);
 
 /* Register */
-int lm_clientlist_register(clientlist_t* cl, eal_tid_t tid, pid_t pid, const char* name, struct sockaddr_un* addr);
-int lm_clientlist_unregister(clientlist_t* cl, struct sockaddr_un *addr);
+int lm_clientlist_register(clientlist_t* cl, eal_tid_t tid, pid_t pid, const char* name, struct sockaddr_un* addr, client_t** ppc);
+int lm_clientlist_unregister(clientlist_t* cl, struct sockaddr_un *addr, client_t **ppc);
 
 /* Maintain */
 int lm_clientlist_maintain(clientlist_t* cl);

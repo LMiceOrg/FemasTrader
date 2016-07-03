@@ -76,6 +76,7 @@ SPICFUN void lmspi_signal(lmspi_t spi, sig_t sigfunc);
 
 #ifdef __cplusplus
 
+/* C++ subscribe callback */
 class CLMSpi;
 typedef void (CLMSpi::*csymbol_callback)(const char* symbol, const void* addr, int size);
 
@@ -99,7 +100,7 @@ public:
 
     void send(const char* symbol, const void* addr, int len);
 
-    int register_callback(symbol_callback func, const char* symbol = NULL, void *udata = NULL);
+    int register_callback(symbol_callback func, const char* symbol = NULL);
 
     int register_cb(csymbol_callback func, const char* symbol = NULL) ;
 

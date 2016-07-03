@@ -219,6 +219,7 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
     memset(p, 0, sizeof(spi_private));
     m_priv = (void*) p;
     uds_msg* sid = &p->sid;    
+    memcpy(p->name, name, strlen(name)>SYMBOL_LENGTH-1?SYMBOL_LENGTH-1:strlen(name));
 
     //Init uds client
     ret = init_uds_client(SOCK_FILE, sid);
@@ -244,11 +245,36 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
     }
 
     //Register client
-    pinfo->type = EM_LMICE_REGCLIENT_TYPE;
-    sid->size = sizeof(lmice_register_t);
-    memset(reg->symbol, 0, SYMBOL_LENGTH);
-    strncpy(reg->symbol,name, strlen(name)>SYMBOL_LENGTH-1?SYMBOL_LENGTH-1:strlen(name));
-    ret = send_uds_msg(sid);
+    evtfd_t efd = (evtfd_t)((char*)p->server.addr+SERVER_REGEVT);
+    lmice_register_data_t* pd = (lmice_register_data_t*)((char*)p->server.addr+SERVER_REGPOS);
+
+    //Try awake lmiced with event
+    bool sended = false;
+    ret = eal_spin_trylock(&pd->lock);
+    if( ret == 0) {
+        if(pd->count < REGLIST_LENGTH) {
+            lmice_register_detail_t *dt = pd->reg + pd->count;
+            dt->tid= eal_gettid();
+            dt->pid = getpid();
+            dt->type = EM_LMICE_REGCLIENT_TYPE;
+            memcpy(dt->symbol,p->name, SYMBOL_LENGTH);
+            memcpy(&dt->un, &sid->local_un, sizeof(dt->un));
+            ++pd->count;
+            sended = true;
+        }
+        eal_spin_unlock(&pd->lock);
+    }
+
+    if(sended) {
+        ret = eal_event_awake( efd );
+    } else {
+        /* Fall back to use UDS */
+        pinfo->type = EM_LMICE_REGCLIENT_TYPE;
+        sid->size = sizeof(lmice_register_t);
+        memcpy(reg->symbol,p->name, SYMBOL_LENGTH);
+        ret = send_uds_msg(sid);
+    }
+
     if(ret == 0 ) {
         lmice_critical_print("Register model[%s] in[%s]\n", name, sid->local_un.sun_path);
         usleep(10000);
@@ -260,7 +286,6 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
     }
 
     //Init spi by local_un
-    memcpy(p->name, reg->symbol, SYMBOL_LENGTH);
     uint64_t hval;
     hval = eal_hash64_fnv1a(&sid->local_un, SUN_LEN(&sid->local_un));
 
@@ -297,6 +322,40 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
 CLMSpi::~CLMSpi()
 {
     spi_private* p = (spi_private*)m_priv;
+    uds_msg *sid = &p->sid;
+    //Register client
+    evtfd_t efd = (evtfd_t)((char*)p->server.addr+SERVER_REGEVT);
+    lmice_register_data_t* pd = (lmice_register_data_t*)((char*)p->server.addr+SERVER_REGPOS);
+
+    //Try awake lmiced with event
+    bool sended = false;
+    int ret;
+    ret = eal_spin_trylock(&pd->lock);
+    if( ret == 0) {
+        if(pd->count < REGLIST_LENGTH) {
+            lmice_register_detail_t *dt = pd->reg + pd->count;
+            dt->tid= eal_gettid();
+            dt->pid = getpid();
+            dt->type = EM_LMICE_UNREGCLIENT_TYPE;
+            memcpy(&dt->un, &sid->local_un, sizeof(dt->un));
+            ++pd->count;
+            sended = true;
+        }
+        eal_spin_unlock(&pd->lock);
+    }
+
+    if(sended) {
+        ret = eal_event_awake( efd );
+    } else {
+        /* Fall back to use UDS */
+        lmice_register_t *reg = (lmice_register_t*)sid->data;
+        lmice_trace_info_t* pinfo = &reg->info;
+        UPDATE_INFO(pinfo);
+        pinfo->type = EM_LMICE_UNREGCLIENT_TYPE;
+        sid->size = sizeof(lmice_register_t);
+        ret = send_uds_msg(sid);
+    }
+
     logging("LMice client[ %s ] stopped %d:%d.\n\n", p->name, getuid(), getpid());
 
     p->quit_flag = 1;
@@ -440,9 +499,11 @@ std::string CLMSpi::gbktoutf8( char *pgbk)
 
 void CLMSpi::subscribe(const char *symbol)
 {
-
+    int ret;
     spi_private* p =(spi_private*)m_priv;
-    uds_msg* sid = &p->sid;
+    lmice_symbol_data_t* pd = (lmice_symbol_data_t*)((char*)p->server.addr+SERVER_SYMPOS);
+    evtfd_t efd = (evtfd_t)((char*)p->server.addr+SERVER_SYMEVT);
+
 
     if(p->shmcount >= CLIENT_SPCNT) {
         lmice_error_print("Sub/pub resource is full\n");
@@ -453,11 +514,9 @@ void CLMSpi::subscribe(const char *symbol)
         return;
     }
     char sym[SYMBOL_LENGTH] = {0};
-    char name[SYMBOL_LENGTH] ={0};
     uint64_t hval;
     strcpy(sym, symbol);
     hval = eal_hash64_fnv1a(sym, SYMBOL_LENGTH);
-    eal_shm_hash_name(hval, name);
 
     spi_shm_t*ps = NULL;
     lmice_shm_t*shm;
@@ -484,28 +543,51 @@ void CLMSpi::subscribe(const char *symbol)
         ps->hval = hval;
         memcpy(ps->symbol, sym, SYMBOL_LENGTH);
         memset(shm, 0, sizeof(lmice_shm_t) );
-        memcpy(shm->name, name, SYMBOL_LENGTH);
+        eal_shm_hash_name(hval, shm->name);
         ++p->shmcount;
     }
 
+    //Try awake lmiced with event
+    bool sended = false;
+    ret = eal_spin_trylock(&pd->lock);
+    if( ret == 0) {
+        if(pd->count < SYMLIST_LENGTH) {
+            lmice_symbol_detail_t *dt = pd->sym + pd->count;
+            dt->hval= hval;
+            dt->pid = getpid();
+            dt->type = EM_LMICE_SUB_TYPE;
+            memcpy(dt->symbol, sym, SYMBOL_LENGTH);
+            ++pd->count;
+            sended = true;
+        }
+        eal_spin_unlock(&pd->lock);
+    }
 
-    sid->size = sizeof(lmice_sub_t);
-    lmice_sub_t *psub = (lmice_sub_t *)sid->data;
-    lmice_trace_info_t *pinfo = &psub->info;
-    time(&pinfo->tm);
-    get_system_time(&pinfo->systime);
-    pinfo->type = EM_LMICE_SUB_TYPE;
-    memcpy(psub->symbol, sym, SYMBOL_LENGTH);
+    if(sended) {
+        ret = eal_event_awake( efd );
+    } else {
+        /* Fall back to use UDS */
+        uds_msg* sid = &p->sid;
+        lmice_sub_t *psub = (lmice_sub_t *)sid->data;
+        lmice_trace_info_t *pinfo = &psub->info;
+        UPDATE_INFO(pinfo);
+        pinfo->type = EM_LMICE_SUB_TYPE;
+        sid->size = sizeof(lmice_sub_t);
+        memcpy(psub->symbol, sym, SYMBOL_LENGTH);
 
-    send_uds_msg(sid);
+        send_uds_msg(sid);
+    }
 
 
 }
 
 void CLMSpi::unsubscribe(const char *symbol)
 {
+    int ret;
     spi_private* p =(spi_private*)m_priv;
     uds_msg* sid = &p->sid;
+    lmice_symbol_data_t* pd = (lmice_symbol_data_t*)((char*)p->server.addr+SERVER_SYMPOS);
+    evtfd_t efd = (evtfd_t)((char*)p->server.addr+SERVER_SYMEVT);
 
     if(p->shmcount == 0) {
         lmice_error_print("Sub/pub resource is empty.\n");
@@ -528,7 +610,7 @@ void CLMSpi::unsubscribe(const char *symbol)
         ps = &p->shmlist[i];
         shm = &ps->shm;
         if(ps->type & SHM_SUB_TYPE && ps->hval == hval) {
-            ps->type &= SHM_PUB_TYPE;
+            ps->type &= (~SHM_SUB_TYPE);
             if(ps->type == 0) {
                 if(shm->fd != 0 && shm->addr != 0) {
                     /* Close shm */
@@ -548,16 +630,37 @@ void CLMSpi::unsubscribe(const char *symbol)
     if(!ps)
         return;
 
-    sid->size = sizeof(lmice_unsub_t);
-    lmice_unsub_t *psub = (lmice_unsub_t *)sid->data;
-    lmice_trace_info_t *pinfo = &psub->info;
+    //Try awake lmiced with event
+    bool sended = false;
+    ret = eal_spin_trylock(&pd->lock);
+    if( ret == 0) {
+        if(pd->count < SYMLIST_LENGTH) {
+            lmice_symbol_detail_t *dt = pd->sym + pd->count;
+            dt->hval= hval;
+            dt->pid = getpid();
+            dt->type = EM_LMICE_UNSUB_TYPE;
+            memcpy(dt->symbol, sym, SYMBOL_LENGTH);
+            ++pd->count;
+            sended = true;
+        }
+        eal_spin_unlock(&pd->lock);
+    }
 
-    time(&pinfo->tm);
-    get_system_time(&pinfo->systime);
-    pinfo->type = EM_LMICE_UNSUB_TYPE;
-    memcpy(psub->symbol, sym, SYMBOL_LENGTH);
+    if(sended) {
+        ret = eal_event_awake( efd );
+    } else {
+        /* Fall back to use UDS */
+        sid->size = sizeof(lmice_unsub_t);
+        lmice_unsub_t *psub = (lmice_unsub_t *)sid->data;
+        lmice_trace_info_t *pinfo = &psub->info;
 
-    send_uds_msg(sid);
+        time(&pinfo->tm);
+        get_system_time(&pinfo->systime);
+        pinfo->type = EM_LMICE_UNSUB_TYPE;
+        memcpy(psub->symbol, sym, SYMBOL_LENGTH);
+
+        send_uds_msg(sid);
+    }
 }
 
 void CLMSpi::publish(const char *symbol)
@@ -566,7 +669,7 @@ void CLMSpi::publish(const char *symbol)
     spi_private* p =(spi_private*)m_priv;
     uds_msg *sid = &p->sid;
     lmice_symbol_data_t* pd = (lmice_symbol_data_t*)((char*)p->server.addr+SERVER_SYMPOS);
-    evtfd_t efd = (evtfd_t)((char*)p->server.addr+SERVER_EVTPOS+sizeof(sem_t));
+    evtfd_t efd = (evtfd_t)((char*)p->server.addr+SERVER_SYMEVT);
 
     if(p->shmcount >= CLIENT_SPCNT) {
         lmice_error_print("Sub/pub resource is full\n");
@@ -614,7 +717,7 @@ void CLMSpi::publish(const char *symbol)
     bool sended = false;
     ret = eal_spin_trylock(&pd->lock);
     if( ret == 0) {
-        if(pd->count < PUBLIST_LENGTH) {
+        if(pd->count < SYMLIST_LENGTH) {
             lmice_symbol_detail_t *dt = pd->sym + pd->count;
             dt->hval= hval;
             dt->pid = getpid();
@@ -642,8 +745,11 @@ void CLMSpi::publish(const char *symbol)
 
 void CLMSpi::unpublish(const char *symbol)
 {
+    int ret;
     spi_private* p =(spi_private*)m_priv;
     uds_msg* sid = &p->sid;
+    lmice_symbol_data_t* pd = (lmice_symbol_data_t*)((char*)p->server.addr+SERVER_SYMPOS);
+    evtfd_t efd = (evtfd_t)((char*)p->server.addr+SERVER_SYMEVT);
 
     if(p->shmcount == 0) {
         lmice_error_print("pub resource is empty.\n");
@@ -686,15 +792,36 @@ void CLMSpi::unpublish(const char *symbol)
     if(!ps)
         return;
 
-    sid->size = sizeof(lmice_unpub_t);
-    lmice_unpub_t *pb = (lmice_unpub_t *)sid->data;
-    lmice_trace_info_t *pinfo = &pb->info;
+    //Try awake lmiced with event
+    bool sended = false;
+    ret = eal_spin_trylock(&pd->lock);
+    if( ret == 0) {
+        if(pd->count < SYMLIST_LENGTH) {
+            lmice_symbol_detail_t *dt = pd->sym + pd->count;
+            dt->hval= hval;
+            dt->pid = getpid();
+            dt->type = EM_LMICE_UNPUB_TYPE;
+            memcpy(dt->symbol, sym, SYMBOL_LENGTH);
+            ++pd->count;
+            sended = true;
+        }
+        eal_spin_unlock(&pd->lock);
+    }
 
-    UPDATE_INFO(pinfo);
-    pinfo->type = EM_LMICE_UNSUB_TYPE;
-    memcpy(pb->symbol, sym, SYMBOL_LENGTH);
+    if(sended) {
+        ret = eal_event_awake( efd );
+    } else {
+        /* Fall back to use UDS */
+        sid->size = sizeof(lmice_unpub_t);
+        lmice_unpub_t *pb = (lmice_unpub_t *)sid->data;
+        lmice_trace_info_t *pinfo = &pb->info;
 
-    send_uds_msg(sid);
+        UPDATE_INFO(pinfo);
+        pinfo->type = EM_LMICE_UNPUB_TYPE;
+        memcpy(pb->symbol, sym, SYMBOL_LENGTH);
+
+        send_uds_msg(sid);
+    }
 }
 
 //void CLMSpi::send(const char *symbol, const void *addr, int len)
@@ -928,7 +1055,7 @@ static uint64_t code_from_symbol(const char* symbol) {
     return hval;
 }
 
-int CLMSpi::register_callback(symbol_callback func, const char* symbol, void *udata)
+int CLMSpi::register_callback(symbol_callback func, const char* symbol)
 {
     spi_private* p =(spi_private*)m_priv;
     if(symbol == NULL) {
@@ -1154,7 +1281,7 @@ int lmspi_register_recv(lmspi_t spi, const char* symbol, symbol_callback *callba
     CLMSpi * pt = (CLMSpi *)spi;
     int ret;
 
-    ret = pt->register_callback(*callback, symbol, NULL);
+    ret = pt->register_callback(*callback, symbol);
     return ret;
 }
 
