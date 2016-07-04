@@ -80,6 +80,7 @@ SPICFUN void lmspi_signal(lmspi_t spi, sig_t sigfunc);
 class CLMSpi;
 typedef void (CLMSpi::*csymbol_callback)(const char* symbol, const void* addr, int size);
 
+/* single-thread SPI */
 class CLMSpi
 {
 public:
