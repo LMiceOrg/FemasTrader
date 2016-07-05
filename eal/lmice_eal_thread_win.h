@@ -53,6 +53,7 @@ forceinline int eal_thread_create(HANDLE* thread, lm_thread_ctx_t* ctx)
 #define eal_thread_join(trd, ret) do {\
     (void)trd;  \
     (void)ret;  \
+	ret = WaitForSingleObject(trd, INFINITE);	\
     }while(0)
 
 #endif /** LMICE_EAL_THREAD_WIN_H */
