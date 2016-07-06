@@ -188,6 +188,9 @@ int main(int argc, char* argv[]) {
 
     lmice_critical_print("NetMD -- a md app --\n");
 
+    /** Silence mode */
+    init_daemon(silent);
+
     /** Create LMiced spi */
     spi = lmspi_create("[md]netmd", -1);
     lmice_info_print("[md]netmd startting in adapter[%s]. filter[%s]..\n", devname, filter);
@@ -206,8 +209,7 @@ int main(int argc, char* argv[]) {
     /** Register signal handler */
     lmspi_signal(spi, netmd_pcap_stop);
 
-    /* Silence */
-    init_daemon(silent);
+
 
     /** Run in main thread */
     netmd_pcap_thread(spi, devname, filter);
