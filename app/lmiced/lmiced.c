@@ -389,7 +389,7 @@ int init_epoll(int sfd) {
     free (events);
 
     close(efd);
-
+    return 0;
 
 }
 

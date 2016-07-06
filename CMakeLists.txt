@@ -193,3 +193,9 @@ target_link_libraries(guavaht model_static eal_static pthread rt ${femas_libs} $
 add_dependencies(guavaht model_static)
 add_dependencies(guavaht eal_static)
 
+#Add genid tool
+LIST(APPEND genid_SRC app/lmiced/genid.c )
+
+add_executable(genid ${genid_SRC})
+target_link_libraries(genid  eal_static pthread rt)
+add_dependencies(genid eal_static)
