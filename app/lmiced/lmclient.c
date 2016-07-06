@@ -438,6 +438,8 @@ int lm_clientlist_maintain(clientlist_t *cl)
                 ret = eal_event_destroy(event);
                 lmice_critical_log("process[%u] remove evt[%s] as [%d]\n", cli->pid, event->name, ret);
 
+                cli->active = CLIENT_DEAD;
+
                 for(j=0; j< cli->count; ++j) {
                     symbol_shm_t *ss = &cli->symshm[j];
                     pubsub_shm_t *ps = ss->ps;

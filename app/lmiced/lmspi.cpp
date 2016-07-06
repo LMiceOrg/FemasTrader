@@ -588,7 +588,7 @@ void CLMSpi::subscribe(const char *symbol)
 
     //Try awake lmiced with event
     bool sended = false;
-    ret = eal_spin_trylock(&pd->lock);
+    ret = eal_spin_lock(&pd->lock);
     if( ret == 0) {
         if(pd->count < SYMLIST_LENGTH) {
             lmice_symbol_detail_t *dt = pd->sym + pd->count;
@@ -671,7 +671,7 @@ void CLMSpi::unsubscribe(const char *symbol)
 
     //Try awake lmiced with event
     bool sended = false;
-    ret = eal_spin_trylock(&pd->lock);
+    ret = eal_spin_lock(&pd->lock);
     if( ret == 0) {
         if(pd->count < SYMLIST_LENGTH) {
             lmice_symbol_detail_t *dt = pd->sym + pd->count;
@@ -754,7 +754,7 @@ void CLMSpi::publish(const char *symbol)
 
     //Try awake lmiced with event
     bool sended = false;
-    ret = eal_spin_trylock(&pd->lock);
+    ret = eal_spin_lock(&pd->lock);
     if( ret == 0) {
         if(pd->count < SYMLIST_LENGTH) {
             lmice_symbol_detail_t *dt = pd->sym + pd->count;
@@ -835,7 +835,7 @@ void CLMSpi::unpublish(const char *symbol)
 
     //Try awake lmiced with event
     bool sended = false;
-    ret = eal_spin_trylock(&pd->lock);
+    ret = eal_spin_lock(&pd->lock);
     if( ret == 0) {
         if(pd->count < SYMLIST_LENGTH) {
             lmice_symbol_detail_t *dt = pd->sym + pd->count;
