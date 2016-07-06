@@ -26,9 +26,10 @@
 #include <kqueue.h>
 #endif
 
-#if defined(__MACH__) or defined(__linux__)
+#if defined(__MACH__) || defined(__linux__)
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <poll.h>
 #endif
 
 #if defined(_WIN32)
@@ -83,6 +84,8 @@ server_t g_server;
 /** Register daemon as service */
 static int init_daemon();
 
+static int init_server();
+
 /** event poll version Daemon-Client communication */
 static int init_epoll(int sfd);
 
@@ -93,11 +96,11 @@ forceinline void proc_msg(uds_msg* msg);
 
 /** Semaphore+shm version Daemon-Client communication */
 /* server event thread */
-void* event_thread(void* p);
+void event_thread(void* p);
 /* server symbol event thread */
-void* symbol_event_thread(void* ptr);
+void symbol_event_thread(void* ptr);
 /* server register event thread */
-void* register_event_thread(void* ptr);
+void register_event_thread(void* ptr);
 
 /** process SIGTERM(13) signal */
 static void signal_handler(int sig) {
@@ -110,7 +113,7 @@ int main(int argc, char* argv[]) {
     uint64_t hval;
     int ret;
 	eal_thread_t pt[4];
-	lm_thread_ctx_t tctx[4];
+    lm_thread_ctx_t *tctx[4];
 
     (void)argc;
     (void)argv;
@@ -122,9 +125,15 @@ int main(int argc, char* argv[]) {
 
     lmice_info_print("LMice server launching...\n");
     /* Init Daemon */
-    g_server.fd = init_daemon();
+    ret = init_daemon();
+    if(ret != 0) {
+        lmice_error_print("Deamon init failed\n");
+        return ret;
+    }
+
+    g_server.fd = init_server();
     if(g_server.fd < 0) {
-        lmice_error_log("Daemon init failed\n");
+        lmice_error_log("Server init failed\n");
         return g_server.fd;
     }
 
@@ -144,21 +153,24 @@ int main(int argc, char* argv[]) {
     }
 
     /* Create event thread */
-	tctx[0].context = &g_server;
-	tctx[0].handler = event_thread;
-	eal_thread_create(&pt[0], &tctx[0]);
+    eal_thread_malloc_context(tctx[0]);
+    tctx[0]->context = &g_server;
+    tctx[0]->handler = event_thread;
+    eal_thread_create(&pt[0], tctx[0]);
     //pthread_create(&pt[0], NULL, event_thread, &g_server);
 
     /* Create symbol thread */
-	tctx[1].context = &g_server;
-	tctx[1].handler = symbol_event_thread;
-	eal_thread_create(&pt[0], &tctx[1]);
+    eal_thread_malloc_context(tctx[1]);
+    tctx[1]->context = &g_server;
+    tctx[1]->handler = symbol_event_thread;
+    eal_thread_create(&pt[1], tctx[1]);
     //pthread_create(&pt[1], NULL, symbol_event_thread, &g_server);
 
     /* Create register thread */
-	tctx[2].context = &g_server;
-	tctx[2].handler = register_event_thread;
-	eal_thread_create(&pt[2], &tctx[2]);
+    eal_thread_malloc_context(tctx[2]);
+    tctx[2]->context = &g_server;
+    tctx[2]->handler = register_event_thread;
+    eal_thread_create(&pt[2], tctx[2]);
     //pthread_create(&pt[2], NULL, register_event_thread, &g_server);
 
     /* Listen and wait signal to end */
@@ -197,14 +209,17 @@ int main(int argc, char* argv[]) {
 
 
 int init_daemon() {
+    if( daemon(0, 1) != 0) {
+        return -2;
+    }
+    return 0;
+}
+
+int init_server() {
     struct flock lock;
     eal_pid_t pid;
     char buf[32] = {0};
     ssize_t sz;
-
-    if( daemon(0, 1) != 0) {
-        return -2;
-    }
 
     int fd = open(PID_FILE, O_CREAT|O_RDWR, 0644);
     if (fd < 0)
@@ -613,7 +628,7 @@ forceinline void proc_msg(uds_msg* msg) {
 	}
 }
 
-void* register_event_thread(void* ptr) {
+void register_event_thread(void* ptr) {
     int ret;
     int cnt;
     int i;
@@ -624,7 +639,7 @@ void* register_event_thread(void* ptr) {
 
     ret = eal_eventp_init(efd);
     if(ret != 0)
-        return NULL;
+        return;
 
     lmice_info_log("Begin register event thread\n");
     for(;;) {
@@ -686,10 +701,10 @@ void* register_event_thread(void* ptr) {
     }/* end-for:endless-loop */
 
     eal_eventp_close(efd);
-    return NULL;
+    return;
 }
 
-void* symbol_event_thread(void* ptr) {
+void symbol_event_thread(void* ptr) {
     int ret;
     server_t *ser = (server_t*)ptr;
     evtfd_t efd = (evtfd_t)((char*)ser->board.addr+SERVER_EVTPOS + SERVER_SYMEVT);
@@ -700,7 +715,7 @@ void* symbol_event_thread(void* ptr) {
 
     ret = eal_eventp_init(efd);
     if(ret != 0)
-        return NULL;
+        return;
 
     lmice_info_log("Begin symbol event thread\n");
     for(;;) {
@@ -778,10 +793,10 @@ void* symbol_event_thread(void* ptr) {
     } /*end-for:endless-loop */
 
     eal_eventp_close(efd);
-    return NULL;
+    return;
 }
 
-void* event_thread(void* ptr) {
+void event_thread(void* ptr) {
     int ret;
     server_t *ser = (server_t*)ptr;
     evtfd_t efd = (evtfd_t)((char*)ser->board.addr+SERVER_EVTPOS);
@@ -793,7 +808,7 @@ void* event_thread(void* ptr) {
 
     ret = eal_eventp_init(efd);
     if(ret != 0)
-        return NULL;
+        return;
 
     lmice_info_log("Begin event thread\n");
 
@@ -859,5 +874,5 @@ void* event_thread(void* ptr) {
     }/* for: ;; */
 
     eal_eventp_close(efd);
-    return NULL;
+    return;
 }

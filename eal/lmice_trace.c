@@ -64,7 +64,7 @@ lmice_trace_name_t lmice_trace_name[] =
         printf("%s%s%s%s:[%d:%s]",  \
             _trace_current_time, LMICE_TRACE_COLOR_TAG3(type), getpid(), _trace_thread_name); \
     } else { \
-        printf("%s%s%s%s:[%d:0x%p]",    \
+        printf("%s%s%s%s:[%d:0x%lx]",    \
             _trace_current_time, LMICE_TRACE_COLOR_TAG3(type), getpid(), eal_gettid()); \
     }
 #endif

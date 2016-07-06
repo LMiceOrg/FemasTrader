@@ -1,6 +1,6 @@
 #include "lmice_eal_thread.h"
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(__linux__)
 
 void* eal_thread_thread(void* pdata)
 {

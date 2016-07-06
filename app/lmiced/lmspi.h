@@ -1,9 +1,11 @@
 #ifndef LMSPI_H
 #define LMSPI_H
+/*
 
 #pragma execution_character_set("utf-8")
 #pragma setlocale("chs")
 
+*/
 
 #if defined(_WIN32) /* Windows */
 
@@ -33,6 +35,7 @@
 #include <string>
 extern "C" {
 #endif
+
 
 /* C subscribe callback type */
 typedef void(*symbol_callback)(const char* symbol, const void* addr, int size);
@@ -80,7 +83,33 @@ SPICFUN void lmspi_signal(lmspi_t spi, sig_t sigfunc);
 class CLMSpi;
 typedef void (CLMSpi::*csymbol_callback)(const char* symbol, const void* addr, int size);
 
-/* single-thread SPI */
+/* LMice daemon SPI
+ * A discrete event dynamic system service provider interface
+ *
+ * poolsize: 0(default)
+ * single-thread callback SPI
+ * callback in single thread, thread-safe
+ * main-thread: init and pub/sub, join or not
+ * spi-thread: event-wait and callback
+ *
+ * poolsize: -1
+ * in thread SPI
+ * callback within the main thread
+ * work:main thread
+ * stop:signal(interrupt or terminate)
+ *
+ * main-thread: init, pub/sub, event-wait and callback
+ *
+ * poolsize : >1
+ * multi-threaded callback SPI
+ * callback(s) in multiple threads, thread-safe and re-entry
+ * work: event thread, and worker thread
+ * stop: signal or quit
+ *
+ * main-thread: init, pub/sub
+ * spi-thread:  event-wait and in-queue
+ * work-thread[ps]: de-dqueue, callback
+ */
 class CLMSpi
 {
 public:

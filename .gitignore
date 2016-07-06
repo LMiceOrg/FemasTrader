@@ -26,3 +26,6 @@
 *.exe
 *.out
 *.app
+
+# Cmake Template files
+CMakeLists.txt.user

@@ -19,7 +19,7 @@ forceinline int eal_thread_create(eal_thread_t* thread, lm_thread_ctx_t* ctx)
     return ret;
 }
 #define eal_thread_join(trd, ret) do {\
-    pthread_join(trd, ret); \
+    ret = pthread_join(trd, NULL); \
     } while(0)
 
 #define eal_create_tls(key) pthread_key_create(&key, NULL)

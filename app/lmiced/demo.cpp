@@ -21,7 +21,7 @@ void callback (const char* symbol, const void* addr, int32_t size)
 class test :public CLMSpi
 {
 public:
-    test():CLMSpi("test")
+    test():CLMSpi("test", -1)
     {}
     void cb(const char* symbol, const void* addr, int size) {
 
@@ -39,7 +39,7 @@ int main() {
     spi.subscribe("[netmd]rb1610");
     sleep(1);
     //lmice_info_print("pub demo\n");
-    //spi.publish("demo");
+    //spi.publish("[netmd]rb1610");
 
     lmice_info_print("reg callback\n");
     spi.register_cb((csymbol_callback)&test::cb, "[netmd]rb1610");

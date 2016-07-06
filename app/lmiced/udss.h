@@ -47,6 +47,7 @@ enum symbol_client_e{
     SERVER_REGPOS = 3072,
     REGLIST_LENGTH = 5,
     SERVER_REGEVT = 2*sizeof(sem_t),
+
 };
 
 /** CLIENT BOARD

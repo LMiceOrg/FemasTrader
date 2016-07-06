@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+#include <limits.h>
 
 #include <eal/lmice_trace.h>    /* EAL tracing */
 #include <eal/lmice_bloomfilter.h> /* EAL Bloomfilter */
@@ -60,6 +61,9 @@ void netmd_bf_create(void) {
     bflter->m = m;
     bflter->k = k;
     bflter->addr = (char*)bflter+ sizeof(lm_bloomfilter_t);
+
+    lmice_critical_print("Bloomfilter initialized:\n\tn:%lu\n\tm:%u\n\tk:%u\n\tf:%lf\n",
+                         n,m,k,f);
 
 }
 
@@ -246,24 +250,8 @@ void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_c
     }
 
     /** pub data */
+    netmd_pub_data(spi, gh->m_symbol, gh, pkthdr->len - 42);
 
-    /* construct symbol */
-    strcat(symbol, "[netmd]");
-    strcat(symbol, gh->m_symbol);
-
-    /* calc bf key */
-    eal_bf_key(bflter, symbol, 32, &key);
-
-    /* check if it's already published */
-    if(eal_bf_find(bflter, &key) == 0) {
-        lmspi_send(spi, symbol, gh, pkthdr->len - 42);
-    } else {
-        /* publish the new symbol */
-        lmspi_publish(spi, symbol);
-        eal_bf_add(bflter, &key);
-        usleep(1000);
-        lmspi_send(spi, symbol, gh, pkthdr->len - 42);
-    }
 
 }
 
@@ -286,12 +274,12 @@ forceinline void netmd_pub_data(lmspi_t spi, const char* sym, const void* addr, 
     eal_bf_key(bflter, symbol, 32, &key);
 
     /* check if it's already published */
-    if(eal_bf_find(bflter, &key) == 0) {
+    if(eal_bf_find(bflter, (const eal_bf_hash_val*)&key) == 0) {
         lmspi_send(spi, symbol, addr, len);
     } else {
         /* publish the new symbol */
         lmspi_publish(spi, symbol);
-        eal_bf_add(bflter, &key);
+        eal_bf_add(bflter, (const eal_bf_hash_val*)&key);
         usleep(1000);
         lmspi_send(spi, symbol, addr, len);
     }

@@ -19,10 +19,11 @@ uint32_t eal_bf_rshash (const unsigned char* str, uint32_t len) {
 uint32_t eal_bf_jshash (const unsigned char* str, uint32_t len) {
     uint32_t hash = 1315423911;
     unsigned int* ch;
+    unsigned int i;
     for(i=0; i<len/4; ++i)
     {
         ch = (unsigned int*)str + i;
-        hash ^= ((hash << 5) + ch + (hash >> 2));
+        hash ^= ((hash << 5) + *ch + (hash >> 2));
     }
     return hash;
 }
@@ -326,6 +327,10 @@ int eal_bf_calculate(uint64_t n, double f, uint32_t *m, uint32_t *k, double* rf)
     if(*k > 16) {
         *k = 16;
         ret = 1;
+    }
+
+    if(*k == 0) {
+        *k = 4;
     }
 
     *rf = pow( (1-exp(-1.0*(*k)*(double)n/(*m * 8) ) ), *k);

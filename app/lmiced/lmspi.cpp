@@ -72,8 +72,9 @@ struct worker_item_s {
 typedef struct worker_item_s worker_item_t;
 
 struct worker_pool_t {
-    int64_t lock;
-    evtfd_t count;
+    int64_t wdpos;
+    int64_t rdpos;
+    evtfd_t event;
     worker_item_t item[128];
 };
 
@@ -82,6 +83,7 @@ struct spi_private {
 
     pthread_t pt;
     volatile int quit_flag;
+    int poolsize;
     lmice_event_t event;
     lmice_shm_t server;
     lmice_shm_t board;
@@ -101,11 +103,16 @@ struct spi_private {
 #define OPT_LOG_DEBUG 1
 
 #define UPDATE_INFO(info) do {    \
-        time(&((info)->tm)); \
-        get_system_time(&((info)->systime));   \
-        (info)->loglevel = 0;   \
-        (info)->pid = getpid(); \
-        (info)->tid = eal_gettid(); \
+    time(&((info)->tm)); \
+    get_system_time(&((info)->systime));   \
+    (info)->loglevel = 0;   \
+    (info)->pid = getpid(); \
+    (info)->tid = eal_gettid(); \
+    } while(0)
+
+#define UPDATE_INFO_TIME(info) do { \
+    time(&(info))->tm));    \
+    get_system_time(&((info)->systime));    \
     } while(0)
 
 static volatile int quit_flag = 0;
@@ -127,6 +134,7 @@ sig_t sigterm_handler = NULL;
 
 void spi_signal_handler(int sig) {
     if(sig == SIGTERM ||sig == SIGINT) {
+        printf("sig %d fired\n", sig);
         quit_flag = 1;
         if(sigterm_handler) {
             sigterm_handler(sig);
@@ -134,68 +142,15 @@ void spi_signal_handler(int sig) {
     }
 }
 
-
-void* spi_thread(void* priv) {
-    spi_private* p = (spi_private*) priv;
+forceinline void proc_event(spi_private* p) {
+    lmice_sub_data_t* dt = (lmice_sub_data_t*)((char*)p->board.addr + CLIENT_SUBPOS);
     uint32_t cnt;
-    sub_detail_t* symlist = new sub_detail_t[CLIENT_SPCNT];
-    memset(symlist, 0, sizeof(sub_detail_t)*CLIENT_SPCNT);
+    int ret;
+    sub_detail_t* symlist = (sub_detail_t*)malloc(sizeof(sub_detail_t)*SUBLIST_LENGTH);
+    memset(symlist, 0, sizeof(sub_detail_t)*SUBLIST_LENGTH);
+
     for(;;) {
-        int ret = eal_event_wait_timed(p->event.fd, 500);
-        if(ret == -1) {
-            /* Timed out or interrupted */
-        } else if(ret == 0) {
-            /* Event fired */
-            lmice_sub_data_t* dt = (lmice_sub_data_t*)((char*)p->board.addr + CLIENT_SUBPOS);
-
-            /* Copy event */
-            eal_spin_lock(&dt->lock);
-
-            cnt = dt->count;
-            if(cnt <= CLIENT_SPCNT) {
-                memcpy(symlist, dt->sub, cnt*sizeof(sub_detail_t));
-            } else {
-                cnt = 0;
-            }
-            dt->count = 0;
-
-            eal_spin_unlock(&dt->lock);
-
-            //lmice_critical_print("Got %u message. %lu, %u\n", cnt, symlist->hval, j<p->shmcount);
-
-            /* Callback event */
-            for(size_t i=0; i<cnt; ++i) {
-                sub_detail_t* sd = symlist +i;
-                for(size_t j=0; j<p->shmcount; ++j) {
-                    spi_shm_t* ps = &p->shmlist[j];
-                    lmice_shm_t* shm = &ps->shm;
-                    const char* addr = (const char*)shm->addr+sd->pos+sizeof(lmice_data_detail_t);
-                    if(sd->hval == ps->hval && ps->type & CLIENT_SUBSYM) {
-                        if(shm->addr == 0) {
-                            /* open shm */
-                            eal_shm_open_readwrite(shm);
-                        }
-                        if(shm->addr) {
-                            if(ps->callback) {
-                                ps->callback(ps->symbol, addr, sd->size);
-                            }
-                            if(p->pthis && ps->pcall) {
-                                (p->pthis->*ps->pcall)(ps->symbol, addr, sd->size);
-                            }
-                            if(p->callback) {
-                                p->callback(ps->symbol, addr, sd->size);
-                            }
-                            if(p->pthis && p->pcall) {
-                                (p->pthis->*p->pcall)(ps->symbol, addr, sd->size);
-                            }
-                            break;
-                        } else {
-                            lmice_error_print("Can't open message[%s].\n", ps->symbol);
-                        }
-                    }
-                } /* for-j: shmcount */
-            }/* for-i:cnt */
-        } /* else-if ret */
+        ret = eal_event_wait_timed(p->event.fd, 500);
 
         if(quit_flag == 1) {
             lmice_critical_print("Quit[Signal] worker process\n");
@@ -205,9 +160,83 @@ void* spi_thread(void* priv) {
             lmice_critical_print("Quit worker process\n");
             break;
         }
+
+        if(ret == -1) {
+            /* Timed out or interrupted */
+            continue;
+        } else if(ret == 0) {
+            /* Event fired */
+        }
+
+        /* Copy event */
+        eal_spin_lock(&dt->lock);
+
+        cnt = dt->count;
+        if(cnt <= SUBLIST_LENGTH) {
+            memcpy(symlist, dt->sub, cnt*sizeof(sub_detail_t));
+        } else {    /* error occurred */
+            cnt = 0;
+        }
+        dt->count = 0;
+
+        eal_spin_unlock(&dt->lock);
+
+        //lmice_critical_print("Got %u message. %lu, %u\n", cnt, symlist->hval, j<p->shmcount);
+
+        /* Callback event */
+        for(size_t i=0; i<cnt; ++i) {
+            sub_detail_t* sd = symlist +i;
+            for(size_t j=0; j<p->shmcount; ++j) {
+                spi_shm_t* ps = &p->shmlist[j];
+                lmice_shm_t* shm = &ps->shm;
+                const char* addr;
+                if(sd->hval == ps->hval && ps->type & CLIENT_SUBSYM) {
+                    if(shm->addr == 0) {
+                        /* open shm */
+                        eal_shm_open_readwrite(shm);
+                    }
+                    if(shm->addr) {
+                        addr = (const char*)shm->addr+sd->pos+sizeof(lmice_data_detail_t);
+                        /* symbol c-callback */
+                        if(ps->callback) {
+                            ps->callback(ps->symbol, addr, sd->size);
+                        }
+                        /* symbol cpp-callback */
+                        if(p->pthis && ps->pcall) {
+                            (p->pthis->*ps->pcall)(ps->symbol, addr, sd->size);
+                        }
+                        /* global c-callback */
+                        if(p->callback) {
+                            p->callback(ps->symbol, addr, sd->size);
+                        }
+                        /* global cpp-callback */
+                        if(p->pthis && p->pcall) {
+                            (p->pthis->*p->pcall)(ps->symbol, addr, sd->size);
+                        }
+                        break;
+                    } else {
+                        lmice_error_print("Can't open message[%s].\n", ps->symbol);
+                    }
+                }
+            } /* for-j: shmcount */
+        }/* for-i:cnt */
+
+
+
     }/* end-for: ;;*/
 
-    delete[] symlist;
+    free(symlist);
+    return;
+}
+
+void* spi_thread(void* priv) {
+    spi_private* p = (spi_private*) priv;
+    char name[64];
+    memset(name, 0, 64);
+    strcat(name, p->name);
+    strcat(name, "-spi-thread");
+    pthread_setname_np(pthread_self(), name);
+    proc_event(p);
     return NULL;
 }
 
@@ -218,9 +247,9 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
     spi_private* p = new spi_private;
     memset(p, 0, sizeof(spi_private));
     m_priv = (void*) p;
-    uds_msg* sid = &p->sid;    
+    uds_msg* sid = &p->sid;
     memcpy(p->name, name, strlen(name)>SYMBOL_LENGTH-1?SYMBOL_LENGTH-1:strlen(name));
-
+    p->poolsize = poolsize;
     //Init uds client
     ret = init_uds_client(SOCK_FILE, sid);
     if(ret != 0) {
@@ -314,7 +343,9 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
 
     /* running and create event thread */
     logging("LMice client[ %s ] running %d:%d...", p->name, getuid(), getpid());
-    pthread_create(&p->pt, NULL, spi_thread, m_priv);
+    if(p->poolsize >= 0) {
+        pthread_create(&p->pt, NULL, spi_thread, m_priv);
+    }
 
 }
 
@@ -323,11 +354,19 @@ CLMSpi::~CLMSpi()
 {
     spi_private* p = (spi_private*)m_priv;
     uds_msg *sid = &p->sid;
-    //Register client
+    //Unregister client
     evtfd_t efd = (evtfd_t)((char*)p->server.addr+SERVER_REGEVT);
     lmice_register_data_t* pd = (lmice_register_data_t*)((char*)p->server.addr+SERVER_REGPOS);
 
-    //Try awake lmiced with event
+    /* Stop spi_thread and/or worker threads */
+    p->quit_flag = 1;
+    if(p->poolsize >= 0) {
+        if(p->pt != 0) {
+            pthread_join(p->pt, NULL);
+        }
+    }
+
+    /* Unregister client */
     bool sended = false;
     int ret;
     ret = eal_spin_trylock(&pd->lock);
@@ -358,15 +397,15 @@ CLMSpi::~CLMSpi()
 
     logging("LMice client[ %s ] stopped %d:%d.\n\n", p->name, getuid(), getpid());
 
-    p->quit_flag = 1;
-    if(p->pt != 0) {
-        pthread_join(p->pt, NULL);
-    }
+    /* Close UDS resource */
     finit_uds_msg(&p->sid);
 
+    /* Close shared resource */
     eal_event_close(p->event.fd);
-    eal_shm_close(p->server.fd, p->server.addr);
     eal_shm_close(p->board.fd, p->board.addr);
+    eal_shm_close(p->server.fd, p->server.addr);
+
+    /* Free private resource */
     delete p;
 }
 
@@ -396,7 +435,7 @@ void CLMSpi::logging(const char* format, ...) {
 //	{
 //		return;
 //	}
-	
+
 //	CUstpFtdcInputOrderField *ord = (CUstpFtdcInputOrderField *)ptrOrd;
 //    lmice_trace_bson_info_t *pinfo = (lmice_trace_bson_info_t *)sid->data;
 //	EalBson bson;
@@ -444,7 +483,7 @@ void CLMSpi::logging(const char* format, ...) {
 //	}
 
 //	CUstpFtdcOrderActionField *ord = (CUstpFtdcOrderActionField *)ptrOrd;
-	
+
 //    lmice_trace_bson_info_t *pinfo = (lmice_trace_bson_info_t *)sid->data;
 //	EalBson bson;
 //    get_system_time(&pinfo->systime);
@@ -470,18 +509,18 @@ void CLMSpi::logging(const char* format, ...) {
 
 static int code_convert(const char *from_charset,const char *to_charset,char *inbuf,size_t inlen,char *outbuf,size_t outlen)
 {
-        iconv_t cd;
-        char **pin = &inbuf;
-        char **pout = &outbuf;
+    iconv_t cd;
+    char **pin = &inbuf;
+    char **pout = &outbuf;
 
-        cd = iconv_open(to_charset,from_charset);
-        if (cd==0)
-                return -1;
-        memset(outbuf,0,outlen);
-        if (iconv(cd,pin,&inlen,pout,&outlen) == (size_t)-1)
-                return -1;
-        iconv_close(cd);
-        return 0;
+    cd = iconv_open(to_charset,from_charset);
+    if (cd==0)
+        return -1;
+    memset(outbuf,0,outlen);
+    if (iconv(cd,pin,&inlen,pout,&outlen) == (size_t)-1)
+        return -1;
+    iconv_close(cd);
+    return 0;
 }
 
 std::string CLMSpi::gbktoutf8( char *pgbk)
@@ -1110,8 +1149,13 @@ int CLMSpi::join()
 {
     int ret = 0;
     spi_private* p =(spi_private*)m_priv;
-    ret = pthread_join(p->pt, NULL);
-    p->pt = 0;
+    if(p->poolsize >= 0) {
+        ret = pthread_join(p->pt, NULL);
+        p->pt = 0;
+    } else {
+        /* peek event and process */
+        proc_event(p);
+    }
     return ret;
 }
 
