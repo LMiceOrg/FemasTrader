@@ -97,14 +97,14 @@ typedef struct {
 
 
 typedef struct lmice_sub_data_s {
-    int64_t lock;
+    volatile int64_t lock;
     uint32_t padding;
     uint32_t count;
     sub_detail_t sub[1];
 } lmice_sub_data_t;
 
 typedef struct lmice_pub_data_s {
-    int64_t lock;
+    volatile int64_t lock;
     int32_t padding;
     int32_t count;
     pub_detail_t pub[1];
@@ -120,7 +120,7 @@ typedef struct _lmice_symbol_detail_t {
 } lmice_symbol_detail_t;
 
 typedef struct _lmice_symbol_data_t {
-    int64_t lock;
+    volatile int64_t lock;
     int32_t padding;
     int32_t count;
     lmice_symbol_detail_t sym[1];
@@ -136,14 +136,14 @@ typedef struct _lmice_register_detail_s {
 }lmice_register_detail_t;
 
 typedef struct lmice_register_data_s {
-    int64_t lock;
+   volatile int64_t lock;
     int32_t padding;
     int32_t count;
     lmice_register_detail_t reg[1];
 } lmice_register_data_t;
 
 struct lmice_data_detail_s {
-    int64_t lock;
+    volatile int64_t lock;
     int32_t count;
     int32_t pos;
 };

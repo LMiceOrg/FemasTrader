@@ -779,6 +779,7 @@ void CLMSpi::publish(const char *symbol)
         pinfo->type = EM_LMICE_PUB_TYPE;
         memcpy(pp->symbol, sym, SYMBOL_LENGTH);
         send_uds_msg(sid);
+        lmice_error_print("Publich Fallback to UDS[%s]\n", sym);
     }
     lmice_critical_print("Publish[%s] as [%s]\n", sym, shm->name);
 }

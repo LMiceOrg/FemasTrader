@@ -53,7 +53,7 @@ static volatile int g_quit_flag = 0;
 
 
 struct server_s {
-    int64_t lock;
+    volatile int64_t lock;
     int fd; /*for .pid file lock */
     uds_msg* pmsg;
     lmice_shm_t board;
@@ -747,6 +747,7 @@ void symbol_event_thread(void* ptr) {
             client_t* cli = NULL;
             pubsub_shm_t * ps = NULL;
             lmice_symbol_detail_t* pd = &symlist[isym];
+            lmice_critical_log("try[%d] symbol[%s]\n",pd->type, pd->symbol);
 
             /* Find the client by pid */
             lm_clientlist_find_pid(ser->clilist, pd->pid, &cli);

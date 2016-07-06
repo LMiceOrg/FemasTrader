@@ -25,7 +25,7 @@ enum shmlist_e {
 };
 
 struct shmlist_s {
-    int64_t lock;
+    volatile int64_t lock;
     uint32_t count;
     pubsub_shm_t shmlist[SHMLIST_COUNT];
     struct shmlist_s *next;

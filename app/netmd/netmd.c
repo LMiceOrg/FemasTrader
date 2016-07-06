@@ -115,7 +115,7 @@ int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
 
-    keylist = 0;
+    keypos = 0;
 
     {
         struct ip_mreq mreq;

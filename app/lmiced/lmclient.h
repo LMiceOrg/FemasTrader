@@ -33,7 +33,7 @@ typedef struct symbol_shm_s symbol_shm_t;
 
 
 struct client_s {
-    int64_t lock;
+    volatile int64_t lock;
     eal_tid_t tid;
     volatile int active;
     pid_t pid;
@@ -50,7 +50,7 @@ typedef struct client_s client_t;
 
 
 struct clientlist_s {
-    int64_t lock;
+    volatile int64_t lock;
     uint32_t count;
     client_t cli[CLIENT_COUNT];
     struct clientlist_s * next;
