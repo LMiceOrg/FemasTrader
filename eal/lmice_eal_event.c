@@ -188,7 +188,7 @@ int eal_event_wait_timed(evtfd_t fd, int millisec)
     get_system_time(&now);
     now += millisec * 10000LL;
     ts.tv_sec = now / 10000000LL;
-    ts.tv_nsec = now % 10000000LL;
+    ts.tv_nsec = (now % 10000000LL)*100;
     ret = sem_timedwait(fd, &ts);
     return ret;
 }
