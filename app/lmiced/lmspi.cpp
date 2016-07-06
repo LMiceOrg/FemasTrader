@@ -349,8 +349,7 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
 
 }
 
-
-CLMSpi::~CLMSpi()
+void CLMSpi::deleteSpi()
 {
     spi_private* p = (spi_private*)m_priv;
     uds_msg *sid = &p->sid;
@@ -408,6 +407,7 @@ CLMSpi::~CLMSpi()
     /* Free private resource */
     delete p;
 }
+
 
 void CLMSpi::register_signal(sig_t sigfunc) {
     sigterm_handler = sigfunc;
