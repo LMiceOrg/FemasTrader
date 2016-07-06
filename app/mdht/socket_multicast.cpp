@@ -1,3 +1,5 @@
+#include <errno.h>
+
 #ifdef SHENGLI_WINDOWS
 
 #else
