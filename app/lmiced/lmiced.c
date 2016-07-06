@@ -739,6 +739,7 @@ void symbol_event_thread(void* ptr) {
         } else if(ret > SYMLIST_LENGTH) { /* error we have */
             ret = 0;
             sym->count = 0;
+            lmice_error_log("symbol_event_thread has count error\n");
         }
         eal_spin_unlock(&sym->lock);
 

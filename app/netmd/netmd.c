@@ -8,6 +8,7 @@
 
 #include <eal/lmice_trace.h>    /* EAL tracing */
 #include <eal/lmice_bloomfilter.h> /* EAL Bloomfilter */
+#include <eal/lmice_eal_hash.h>
 
 #include "guavaproto.h"
 
@@ -18,6 +19,9 @@
 pcap_t* pcapHandle = NULL;
 
 lm_bloomfilter_t* bflter = NULL;
+
+uint64_t keylist[512];
+int keypos;
 
 /* netmd package callback */
 void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_char* packet);
@@ -110,6 +114,8 @@ int main(int argc, char* argv[]) {
 
     (void)argc;
     (void)argv;
+
+    keylist = 0;
 
     {
         struct ip_mreq mreq;
@@ -357,22 +363,40 @@ void netmd_pcap_stop(int sig) {
 
 forceinline void netmd_pub_data(lmspi_t spi, const char* sym, const void* addr, int len) {
     char symbol[32] = {0};
-    eal_bf_hash_val key;
+    //eal_bf_hash_val key;
+    uint64_t hval;
+    int ret;
+    int findit = 0;
 
     /* construct symbol */
     strcat(symbol, "[netmd]");
     strcat(symbol, sym);
 
     /* calc bf key */
-    eal_bf_key(bflter, symbol, 32, key);
+    hval = eal_hash64_fnv1a(symbol, 32);
+    for(ret = 0; ret < keypos; ++ret) {
+        if(keylist[i] == hval) {
+            findit = 1;
+            break;
+        }
+    }
+    //eal_bf_key(bflter, symbol, 32, key);
 
     /* check if it's already published */
-    if(eal_bf_find(bflter, key) == 0) {
+    //if(eal_bf_find(bflter, key) == 0) {
+    if(findit) {
         lmspi_send(spi, symbol, addr, len);
     } else {
         /* publish the new symbol */
         lmspi_publish(spi, symbol);
-        eal_bf_add(bflter, key);
+        //eal_bf_add(bflter, key);
+        if(keypos >= 512) {
+            lmice_error_print("keylist is full\n");
+        } else {
+            keylist[keypos] = hval;
+            ++keypos;
+        }
+
         usleep(1000);
         lmspi_send(spi, symbol, addr, len);
     }
