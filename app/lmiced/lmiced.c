@@ -706,6 +706,7 @@ void register_event_thread(void* ptr) {
 
 void symbol_event_thread(void* ptr) {
     int ret;
+    int sym_count;
     server_t *ser = (server_t*)ptr;
     evtfd_t efd = (evtfd_t)((char*)ser->board.addr+SERVER_EVTPOS + SERVER_SYMEVT);
     lmice_symbol_data_t* sym = (lmice_symbol_data_t*)((char*)ser->board.addr+SERVER_SYMPOS);
@@ -732,18 +733,18 @@ void symbol_event_thread(void* ptr) {
 
         /* Check publish message */
         eal_spin_lock(&sym->lock);
-        ret = sym->count;
-        if(ret >0 && ret <= SYMLIST_LENGTH) {
-            memcpy(symlist, sym->sym, ret*sizeof(lmice_symbol_detail_t));
+        sym_count = sym->count;
+        if(sym_count >0 && sym_count <= SYMLIST_LENGTH) {
+            memcpy(symlist, sym->sym, sym_count*sizeof(lmice_symbol_detail_t));
             sym->count = 0;
-        } else if(ret > SYMLIST_LENGTH) { /* error we have */
-            ret = 0;
+        } else if(sym_count > SYMLIST_LENGTH) { /* error we have */
+            sym_count = 0;
             sym->count = 0;
             lmice_error_log("symbol_event_thread has count error\n");
         }
         eal_spin_unlock(&sym->lock);
 
-        for(isym = 0; isym<ret; ++isym) {
+        for(isym = 0; isym<sym_count; ++isym) {
             client_t* cli = NULL;
             pubsub_shm_t * ps = NULL;
             lmice_symbol_detail_t* pd = &symlist[isym];
