@@ -89,7 +89,7 @@ void netmd_bf_delete(void) {
 }
 
 static int position = 11;
-static int bytes = sizeof(guava_udp_normal)+sizeof(guava_udp_head);
+static int bytes = sizeof(struct guava_udp_normal)+sizeof(struct guava_udp_head);
 
 int main(int argc, char* argv[]) {
     lmspi_t spi;
