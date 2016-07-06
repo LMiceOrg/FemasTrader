@@ -780,6 +780,7 @@ void CLMSpi::publish(const char *symbol)
         memcpy(pp->symbol, sym, SYMBOL_LENGTH);
         send_uds_msg(sid);
     }
+    lmice_critical_print("Publish[%s] as [%s]\n", sym, shm->name);
 }
 
 void CLMSpi::unpublish(const char *symbol)
@@ -955,7 +956,7 @@ void CLMSpi::send(const char *symbol, const void *addr, int len)
             if(shm->fd == 0) {
                 ret =eal_shm_open_readwrite(shm);
                 if(ret != 0) {
-                    lmice_error_print("spi_send:Open shm[%s] failed[%d]\n", shm->name, ret);
+                    lmice_error_print("spi_send:Open shm[%s] failed[%d][%s]\n", shm->name, ret, symbol);
                     break;
                 }
             }

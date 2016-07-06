@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
         }
         memset(symbol, 0, 32);
         strcat(symbol, cmd);
-        hval = eal_hash64_fnv1a(cmd, 32);
+        hval = eal_hash64_fnv1a(symbol, 32);
         eal_event_hash_name(hval, ename);
         eal_shm_hash_name(hval, sname);
 

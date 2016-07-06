@@ -52,7 +52,7 @@ int eal_bf_calculate(uint64_t n, double f, uint32_t* m, uint32_t* k, double *rf)
  */
 int eal_bf_value(const unsigned char* ctx, uint32_t size, eal_bf_hash_val* val);
 
-int eal_bf_key(lm_bloomfilter_t* bf, const unsigned char* ctx, uint32_t size, eal_bf_hash_val* val);
+int eal_bf_key(lm_bloomfilter_t* bf, const unsigned char* ctx, uint32_t size, uint32_t* val);
 
 /**
  * @brief eal_bf_find: find bloomfilter
@@ -60,7 +60,7 @@ int eal_bf_key(lm_bloomfilter_t* bf, const unsigned char* ctx, uint32_t size, ea
  * @param val: hash value
  * @return: 0:exist 1:not exist
  */
-int eal_bf_find(lm_bloomfilter_t* bf, const eal_bf_hash_val* val);
+int eal_bf_find(lm_bloomfilter_t* bf, const uint32_t* val);
 
 
 /**
@@ -69,7 +69,7 @@ int eal_bf_find(lm_bloomfilter_t* bf, const eal_bf_hash_val* val);
  * @param val: hash value
  * @return : 0 success else:faied
  */
-int eal_bf_add(lm_bloomfilter_t* bf, const eal_bf_hash_val* val);
+int eal_bf_add(lm_bloomfilter_t* bf, const uint32_t* val);
 
 #endif /** LMICE_BLOOMFILTER_H */
 

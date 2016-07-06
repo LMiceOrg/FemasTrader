@@ -11,6 +11,10 @@
 
 #include "guavaproto.h"
 
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+
 pcap_t* pcapHandle = NULL;
 
 lm_bloomfilter_t* bflter = NULL;
@@ -98,6 +102,8 @@ int main(int argc, char* argv[]) {
     int i;
     int silent = 0;
 
+    int m_sock;
+
     char devname[64] = "p6p1";
     char filter[128] = "udp and port 30100";
 
@@ -105,6 +111,26 @@ int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
 
+    {
+        struct ip_mreq mreq;
+        struct sockaddr_in local_addr;
+        int flag=1;
+        m_sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&flag, sizeof(flag));
+
+        memset(&local_addr, 0, sizeof(local_addr));
+        local_addr.sin_family = AF_INET;
+        local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        local_addr.sin_port = htons(5001);	//multicast port
+        bind(m_sock, (struct sockaddr*)&local_addr, sizeof(local_addr));
+
+
+        mreq.imr_multiaddr.s_addr = inet_addr("238.0.1.2");	//multicast group ip
+        mreq.imr_interface.s_addr = inet_addr("10.10.21.191");
+
+        setsockopt(m_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
+
+    }
 
     /** Process command line */
     for(i=0; i< argc; ++i) {
@@ -338,15 +364,15 @@ forceinline void netmd_pub_data(lmspi_t spi, const char* sym, const void* addr, 
     strcat(symbol, sym);
 
     /* calc bf key */
-    eal_bf_key(bflter, symbol, 32, &key);
+    eal_bf_key(bflter, symbol, 32, key);
 
     /* check if it's already published */
-    if(eal_bf_find(bflter, (const eal_bf_hash_val*)&key) == 0) {
+    if(eal_bf_find(bflter, key) == 0) {
         lmspi_send(spi, symbol, addr, len);
     } else {
         /* publish the new symbol */
         lmspi_publish(spi, symbol);
-        eal_bf_add(bflter, (const eal_bf_hash_val*)&key);
+        eal_bf_add(bflter, key);
         usleep(1000);
         lmspi_send(spi, symbol, addr, len);
     }

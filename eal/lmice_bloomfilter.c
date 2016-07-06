@@ -348,7 +348,7 @@ int eal_bf_value(const unsigned char *ctx, uint32_t size, eal_bf_hash_val *val)
 }
 
 
-int eal_bf_find(lm_bloomfilter_t *bf, const eal_bf_hash_val *val)
+int eal_bf_find(lm_bloomfilter_t *bf, const uint32_t *val)
 {
     int ret = 0;
     uint32_t i=0;
@@ -356,7 +356,7 @@ int eal_bf_find(lm_bloomfilter_t *bf, const eal_bf_hash_val *val)
     uint8_t value;
     uint8_t* vector =(uint8_t*)bf->addr;
     for(i=0; i < bf->k; ++i) {
-        n = (*val[i]) % (bf->m * 8);
+        n = (*(val+i)) % (bf->m * 8);
         value = (vector[n/8] >>(n%8) ) & 1;
         if(value == 0) {
             ret = 1;
@@ -367,13 +367,13 @@ int eal_bf_find(lm_bloomfilter_t *bf, const eal_bf_hash_val *val)
 }
 
 
-int eal_bf_add(lm_bloomfilter_t *bf, const eal_bf_hash_val *val)
+int eal_bf_add(lm_bloomfilter_t *bf, const uint32_t *val)
 {
     uint32_t i=0;
     uint32_t n;
     uint8_t* vector =(uint8_t*)bf->addr;
     for(i=0; i < bf->k; ++i) {
-        n = (*val[i]) % (bf->m  * 8);
+        n = (*(val+i)) % (bf->m  * 8);
         vector[n/8] |= (1<<n%8);
     }
 
@@ -381,10 +381,10 @@ int eal_bf_add(lm_bloomfilter_t *bf, const eal_bf_hash_val *val)
 }
 
 
-int eal_bf_key(lm_bloomfilter_t *bf, const unsigned char *ctx, uint32_t size, eal_bf_hash_val *val)
+int eal_bf_key(lm_bloomfilter_t *bf, const unsigned char *ctx, uint32_t size, uint32_t *val)
 {
     int i=0;
     for(i=0; i< bf->k; ++i)
-        (*val)[i] = eal_bf_hash_list[i](ctx, size);
+        *(val+i) = eal_bf_hash_list[i](ctx, size);
     return 0;
 }
