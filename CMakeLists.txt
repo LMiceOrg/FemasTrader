@@ -193,9 +193,13 @@ target_link_libraries(guavaht model_static eal_static pthread rt ${femas_libs} $
 add_dependencies(guavaht model_static)
 add_dependencies(guavaht eal_static)
 
-#Add genid tool
-LIST(APPEND genid_SRC app/lmiced/genid.c )
 
-add_executable(genid ${genid_SRC})
-target_link_libraries(genid  eal_static pthread rt)
-add_dependencies(genid eal_static)
+#Add HT strategy model
+LIST(APPEND strategyht_SRC app/strategyht/strategyht.cpp
+    app/strategyht/strategy_ins.cpp)
+#    app/strategyht/strategy_status.cpp)
+add_executable(strategyht ${strategyht_SRC})
+
+target_link_libraries(strategyht model_static eal_static pthread rt ${femas_libs} ${femasmd_libs}  ${bson_libs} ${fc_libs})
+add_dependencies(strategyht model_static)
+add_dependencies(strategyht eal_static)

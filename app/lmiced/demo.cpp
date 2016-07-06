@@ -76,6 +76,8 @@ int main() {
     printf("Press Ctrl+C to quit.\n");
     spi.join();
 
+    spi.deleteSpi();
+
     return 0;
 
 }
