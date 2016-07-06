@@ -8,9 +8,11 @@
 #include <time.h>
 void callback (const char* symbol, const void* addr, int32_t size)
 {
-    int64_t t = 0;
-    int64_t t2 = 0;
-    get_system_time(&t);
+int64_t t = 0;
+        int64_t t2 = 0;
+        get_system_time(&t);
+        sscanf((const char*)addr, "shm send at %ld\n", &t2);
+        lmice_warning_print("C:%s[%lu][%lx] recv %d  timediff=%ld\n", symbol, (uint64_t)addr%8, addr, size, t-t2);
     //lmice_info_print("callback symbol %s as size %d, at %lx\n", symbol, size, addr);
     //lmice_warning_print("%s data is: %s\n",symbol, (const char*)addr);
     //sscanf((const char*)addr, "shm send at %ld\n", &t2);
@@ -24,7 +26,7 @@ class test :public CLMSpi
 private:
     double m_f;
 public:
-    test():CLMSpi("test", -1)
+    test():CLMSpi("test", 0)
     {}
     double f() {
         return m_f;
@@ -38,8 +40,8 @@ public:
         int64_t t = 0;
         int64_t t2 = 0;
         get_system_time(&t);
-        lmice_warning_print("C:%s[%lu][%u] recv %ld double f=%lf\n", symbol, (uint64_t)addr%8, size, t, f());
-        lmice_warning_print("%lf\n", m_f);
+	sscanf((const char*)addr, "shm send at %ld\n", &t2);
+        lmice_warning_print("C:%s[%lu][%lx] recv %d  timediff=%ld\n", symbol, (uint64_t)addr%8, addr, size, t-t2);
     }
 };
 
@@ -50,26 +52,26 @@ int main() {
     spi.subscribe("[netmd]rb1610");
     sleep(1);
     //lmice_info_print("pub demo\n");
-    //spi.publish("[netmd]rb1610");
+    spi.publish("[netmd]rb1610");
     spi.f(123);
 
     lmice_info_print("reg callback\n");
-    spi.register_cb((csymbol_callback)&test::cb, "[netmd]rb1610");
+    //spi.register_cb((csymbol_callback)&test::cb, "[netmd]rb1610");
     spi.register_callback(callback, "[netmd]rb1610");
     sleep(1);
     //return 0;
-//    lmice_info_print("senddata demo\n");
-//    for(size_t i=0; i< 10; ++i) {
-//        char buff[64];
-//        int64_t t;
-//        int size;
-//        get_system_time(&t);
-//        memset(buff, 0, 64);
-//        size = sprintf(buff, "shm send at %ld\n", t);
+    lmice_info_print("senddata demo\n");
+    for(size_t i=0; i< 10; ++i) {
+        char buff[64];
+        int64_t t;
+        int size;
+        get_system_time(&t);
+        memset(buff, 0, 64);
+        size = sprintf(buff, "shm send at %ld\n", t);
 
-//        spi.send("demo", buff, size);
-//        sleep(1);
-//    }
+        spi.send("[netmd]rb1610", buff, size);
+        sleep(1);
+    }
 
     printf("Press Ctrl+C to quit.\n");
     spi.join();
