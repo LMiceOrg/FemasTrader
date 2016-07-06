@@ -62,7 +62,7 @@ void netmd_bf_create(void) {
     bflter->k = k;
     bflter->addr = (char*)bflter+ sizeof(lm_bloomfilter_t);
 
-    lmice_critical_print("Bloomfilter initialized:\n\tn:%lu\n\tm:%u\n\tk:%u\n\tf:%lf\n",
+    lmice_critical_print("Bloomfilter initialized:\n\tn:%lu\n\tm:%u\n\tk:%u\n\tf:%5.15lf\n",
                          n,m,k,f);
 
 }
@@ -132,7 +132,7 @@ int main(int argc, char* argv[]) {
     lmice_critical_print("NetMD -- a md app --\n");
 
     /** Create LMiced spi */
-    spi = lmspi_create("[md]netmd", 0);
+    spi = lmspi_create("[md]netmd", -1);
     lmice_info_print("[md]netmd startting in adapter[%s]...\n", devname);
     if(uid != -1) {
         ret = seteuid(getuid());

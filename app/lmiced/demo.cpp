@@ -13,22 +13,33 @@ void callback (const char* symbol, const void* addr, int32_t size)
     get_system_time(&t);
     //lmice_info_print("callback symbol %s as size %d, at %lx\n", symbol, size, addr);
     //lmice_warning_print("%s data is: %s\n",symbol, (const char*)addr);
-    sscanf((const char*)addr, "shm send at %ld\n", &t2);
+    //sscanf((const char*)addr, "shm send at %ld\n", &t2);
     //lmice_warning_print("The fun callback send at %ld\n", t);
-    lmice_warning_print("G:%s[%lu][%u] send %ld, recv %ld, total:%ld\n", symbol, (uint64_t)addr%8, size, t2, t, t-t2);
+    //lmice_warning_print("G:%s[%lu][%u] send %ld, recv %ld, total:%ld\n", symbol, (uint64_t)addr%8, size, t2, t, t-t2);
+    lmice_info_print("global C callback %s\n", (const char*) addr);
 }
 
 class test :public CLMSpi
 {
+private:
+    double m_f;
 public:
     test():CLMSpi("test", -1)
     {}
+    double f() {
+        return m_f;
+    }
+    void f(double d) {
+        m_f=d;
+    }
+
     void cb(const char* symbol, const void* addr, int size) {
 
         int64_t t = 0;
         int64_t t2 = 0;
         get_system_time(&t);
-        lmice_warning_print("C:%s[%lu][%u] recv %ld \n", symbol, (uint64_t)addr%8, size, t);
+        lmice_warning_print("C:%s[%lu][%u] recv %ld double f=%lf\n", symbol, (uint64_t)addr%8, size, t, f());
+        lmice_warning_print("%lf\n", m_f);
     }
 };
 
@@ -40,10 +51,11 @@ int main() {
     sleep(1);
     //lmice_info_print("pub demo\n");
     //spi.publish("[netmd]rb1610");
+    spi.f(123);
 
     lmice_info_print("reg callback\n");
     spi.register_cb((csymbol_callback)&test::cb, "[netmd]rb1610");
-    //spi.register_callback(callback, "demo");
+    spi.register_callback(callback, "[netmd]rb1610");
     sleep(1);
     //return 0;
 //    lmice_info_print("senddata demo\n");
