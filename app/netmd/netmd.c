@@ -375,7 +375,7 @@ forceinline void netmd_pub_data(lmspi_t spi, const char* sym, const void* addr, 
     /* calc bf key */
     hval = eal_hash64_fnv1a(symbol, 32);
     for(ret = 0; ret < keypos; ++ret) {
-        if(keylist[i] == hval) {
+        if(keylist[ret] == hval) {
             findit = 1;
             break;
         }
