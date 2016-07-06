@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
         eal_event_hash_name(hval, ename);
         eal_shm_hash_name(hval, sname);
 
-        printf("symbol:[%s] \n\tshm name[%s]\n\tevent name[%s]\n\n", symbol, sname, ename);
+        printf("symbol:[%s] \n\tshm name[%s]\n\tevt name[%s]\n\n", symbol, sname, ename);
     }
     return 0;
 }

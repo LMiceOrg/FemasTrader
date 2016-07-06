@@ -840,7 +840,7 @@ void event_thread(void* ptr) {
             /*lmice_info_log("event fired, size=%d, hval=%lu\n", ret, publist[0].hval);
              */
             ipub = 0;
-            //for(ipub =0; ipub < ret; ++ipub) {
+            for(ipub =0; ipub < ret; ++ipub) {
             /* Awake subscribers */
             for(i=0; i< ser->clilist->count; ++i) {
                 client_t* cli = &ser->clilist->cli[i];
@@ -866,7 +866,7 @@ void event_thread(void* ptr) {
                     }
                 }
             }
-            //}
+            }
 
 
         }
