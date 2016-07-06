@@ -13,10 +13,11 @@ ELSE()
 ENDIF()
 
 INCLUDE_DIRECTORIES(.
-    app/lmiced
     eal
     lib/FemasAPIv2/linux64/include
-    lib/libbson/include)
+    lib/libbson/include
+    lib/libforecaster
+    app/lmiced/)
 
 FIND_LIBRARY(femas_libs NAMES USTPtraderapi
             	PATHS ${CMAKE_SOURCE_DIR}/lib/FemasAPIv2/linux64/lib)
@@ -27,9 +28,13 @@ FIND_LIBRARY(femasmd_libs NAMES USTPmduserapi
 FIND_LIBRARY(bson_libs NAMES bson
                 PATHS ${CMAKE_SOURCE_DIR}/lib/libbson/lib)
 
+FIND_LIBRARY(fc_libs NAMES forecaster
+                PATHS ${CMAKE_SOURCE_DIR}/lib/libforecaster)
+
 message("Femas Lib:" ${femas_libs})
 message("Femas MD lib:" ${femasmd_libs})
 message("Bson lib:" ${bson_libs})
+message("forecaster lib:" ${fc_libs})
 
 #
 #LINK_DIRECTORIES(/home/hehao/work/ZeusingApi_20150331)
@@ -47,7 +52,6 @@ LIST(APPEND eal_SRCS  eal/lmice_ring.c
     eal/lmice_eal_aio.c
     eal/lmice_eal_thread.c
     eal/lmice_bloomfilter.c
-    eal/lmice_udss.c
     eal/lmice_eal_log.cpp
     eal/lmice_eal_bson.cpp )
 
@@ -59,6 +63,18 @@ ADD_LIBRARY(eal_static STATIC ${eal_SRCS})
 SET_TARGET_PROPERTIES(eal_static PROPERTIES OUTPUT_NAME "eal")
 SET_TARGET_PROPERTIES(eal_static PROPERTIES CLEAN_DIRECT_OUTPUT 1)
 #SET_TARGET_PROPERTIES(eal_static PROPERTIES VERSION 1.2 SOVERSION 1)
+
+
+#Add Model static lib
+LIST(APPEND model_SRC app/lmiced/lmspi.cpp
+    app/lmiced/udss.c
+)
+
+add_library(model_static STATIC ${model_SRC})
+SET_TARGET_PROPERTIES(model_static PROPERTIES OUTPUT_NAME "model")
+SET_TARGET_PROPERTIES(model_static PROPERTIES CLEAN_DIRECT_OUTPUT 1)
+add_dependencies(model_static eal_static)
+
 
 #App Lmiced
 LIST(APPEND lmiced_SRCS app/lmiced/lmiced.c
@@ -105,7 +121,8 @@ LIST(APPEND guavamd_SRC app/guavamd/guava_demo.cpp
     app/guavamd/socket_multicast.cpp )
 
 ADD_EXECUTABLE(guavamd ${guavamd_SRC})
-target_link_libraries(guavamd eal_static pthread rt dl ${bson_libs})
+target_link_libraries(guavamd model_static eal_static pthread rt dl ${bson_libs})
+add_dependencies(guavamd model_static)
 add_dependencies(guavamd eal_static)
 
 
@@ -167,3 +184,17 @@ add_executable(netmd ${netmd_SRC})
 target_link_libraries(netmd model_static eal_static pthread rt pcap )
 add_dependencies(netmd model_static)
 add_dependencies(netmd eal_static)
+
+
+#Add HT guava md model
+LIST(APPEND guavaht_SRC app/guavaht/guava_demo.cpp
+    app/guavaht/guava_quote.cpp
+    app/guavaht/guavaht.cpp
+    app/guavaht/profile.cpp
+    app/guavaht/socket_multicast.cpp )
+
+add_executable(guavaht ${guavaht_SRC})
+target_link_libraries(guavaht model_static eal_static pthread rt ${femas_libs} ${femasmd_libs}  ${bson_libs} ${fc_libs})
+add_dependencies(guavaht model_static)
+add_dependencies(guavaht eal_static)
+
