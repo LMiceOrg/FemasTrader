@@ -19,7 +19,7 @@ lm_bloomfilter_t* bflter = NULL;
 void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_char* packet);
 
 /* netmd worker thread */
-int netmd_pcap_thread(lmspi_t spi, const char *devname);
+int netmd_pcap_thread(lmspi_t spi, const char *devname, const char *packet_filter);
 
 /* stop netmd worker */
 void netmd_pcap_stop(int sig);
@@ -42,6 +42,7 @@ void print_usage(void) {
            "\t-d, --device\t\tset adapter device name\n"
            "\t-u, --uid\t\tset user id when running\n"
            "\t-s, --silent\t\trun in silent mode[backend]\n"
+           "\t-f, --filter\t\tfilter to run pcap\n"
            "\n"
            );
 }
@@ -80,20 +81,24 @@ int main(int argc, char* argv[]) {
     int i;
     int silent = 0;
     char devname[64] = "p6p1";
+    char filter[128] = "udp and port 30100";
 
     (void)argc;
     (void)argv;
+
+    printf("size :%lu\n", sizeof(IncQuotaDataT));
+    return 0;
 
 
     /** Process command line */
     for(i=0; i< argc; ++i) {
         char* cmd = argv[i];
-        if(strcmp(cmd, "-h") == 0 ||
+        if(     strcmp(cmd, "-h") == 0 ||
                 strcmp(cmd, "--help") == 0) {
             print_usage();
             return 0;
         } else if(strcmp(cmd, "-d") == 0 ||
-            strcmp(cmd, "--device") == 0) {
+                  strcmp(cmd, "--device") == 0) {
             if(i+1<argc) {
                 cmd = argv[i+1];
                 if(strlen(cmd)>63) {
@@ -126,14 +131,30 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             ++i;
+        } else if(strcmp(cmd, "-f") == 0 ||
+                  strcmp(cmd, "--filter") == 0) {
+            if(i+i<argc) {
+                cmd = argv[i+1];
+                memset(filter, 0, sizeof(filter));
+                ret = strlen(cmd);
+                if(ret > 128) {
+                    lmice_error_print("filter string is too long(>127)\n");
+                    return ret;
+                }
+                strncpy(filter, cmd, ret);
+            } else {
+                lmice_error_print("Command(%s) require filter string\n", cmd);
+                return 1;
+            }
+            ++i;
         }
-    }
+    } /* end-for: argc*/
 
     lmice_critical_print("NetMD -- a md app --\n");
 
     /** Create LMiced spi */
     spi = lmspi_create("[md]netmd", -1);
-    lmice_info_print("[md]netmd startting in adapter[%s]...\n", devname);
+    lmice_info_print("[md]netmd startting in adapter[%s]. filter[%s]..\n", devname, filter);
     if(uid != -1) {
         ret = seteuid(getuid());
         if(ret != 0) {
@@ -147,16 +168,18 @@ int main(int argc, char* argv[]) {
     netmd_bf_create();
 
     /** Register signal handler */
-    //lmspi_signal(spi, netmd_pcap_stop);
+    lmspi_signal(spi, netmd_pcap_stop);
 
     /** Run in main thread */
-    //netmd_pcap_thread(spi, devname);
-    for(ret=0; ret<10; ++ret) {
+    netmd_pcap_thread(spi, devname, filter);
+    /*
+     * for(ret=0; ret<10; ++ret) {
         char buff[32] = {0};
         sprintf(buff, "data is %d\n", ret);
         netmd_pub_data(spi, "rb1610", buff, 32);
         usleep(500000);
     }
+    */
 
     /** Exit and maintain resource */
     lmspi_quit(spi);
@@ -170,12 +193,12 @@ int main(int argc, char* argv[]) {
 }
 
 /* netmd worker thread */
-int netmd_pcap_thread(lmspi_t spi, const char *devname) {
+int netmd_pcap_thread(lmspi_t spi, const char *devname, const char* packet_filter) {
     pcap_t *adhandle;
     char errbuf[PCAP_ERRBUF_SIZE];
     u_int netmask =0xffffff;
     /* setup the package filter  */
-    const char packet_filter[] = "udp and port 30100";
+    /* const char packet_filter[] = "udp and port 30100"; */
     struct bpf_program fcode;
 
     /* Open the adapter */
@@ -194,7 +217,7 @@ int netmd_pcap_thread(lmspi_t spi, const char *devname) {
     }
 
     /*set buffer size 1MB, use default */
-    //pcap_set_buffer_size(adhandle, 1024*1024);
+    pcap_set_buffer_size(adhandle, 1024*1024);
 
 
     /*compile the filter*/

@@ -39,9 +39,9 @@ typedef struct IncQuotaData{
 
 typedef struct TraderPL
 {
-	int last_postion;      //当前净持仓
-	int last_pro_PL;	   //当前过程利润
-	int total_fee;         //总手续费
+	int last_postion;      //褰撳墠鍑�鎸佷粨
+	int last_pro_PL;	   //褰撳墠杩囩▼鍒╂鼎
+	int total_fee;         //鎬绘墜缁垂
 }TRPL,*PTRPL;
 
 

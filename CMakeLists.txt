@@ -8,6 +8,9 @@ IF( ${CMAKE_CXX_COMPILER} MATCHES  "[cg][+][+]")
     set(CMAKE_CXX_FLAGS "-Wall -std=c++11")
     set(CMAKE_CXX_FLAGS_DEBUG "-g3")
     set(CMAKE_CXX_FLAGS_RELEASE "-O2")
+    set(CMAKE_C_FLAGS "-Wall -std=c99")
+    set(CMAKE_C_FLAGS_DEBUG "-g3")
+    set(CMAKE_C_FLAGS_RELEASE "-o2")
 ELSE()
 
 ENDIF()
@@ -137,15 +140,7 @@ add_executable(femasmd ${fmmd_SRC})
 target_link_libraries(femasmd eal_static pthread rt ${femasmd_libs} ${bson_libs})
 add_dependencies(femasmd eal_static)
 
-#Add Model static lib
-LIST(APPEND model_SRC app/lmiced/lmspi.cpp
-    app/lmiced/udss.c
-)
 
-add_library(model_static STATIC ${model_SRC})
-SET_TARGET_PROPERTIES(model_static PROPERTIES OUTPUT_NAME "model")
-SET_TARGET_PROPERTIES(model_static PROPERTIES CLEAN_DIRECT_OUTPUT 1)
-add_dependencies(model_static eal_static)
 #Add demo model
 LIST(APPEND demo_SRC app/lmiced/demo.cpp
 )
@@ -187,11 +182,11 @@ add_dependencies(netmd eal_static)
 
 
 #Add HT guava md model
-LIST(APPEND guavaht_SRC app/guavaht/guava_demo.cpp
-    app/guavaht/guava_quote.cpp
-    app/guavaht/guavaht.cpp
-    app/guavaht/profile.cpp
-    app/guavaht/socket_multicast.cpp )
+LIST(APPEND guavaht_SRC app/mdht/guava_demo.cpp
+    app/mdht/guava_quote.cpp
+    app/mdht/guavaht.cpp
+    app/mdht/profile.cpp
+    app/mdht/socket_multicast.cpp )
 
 add_executable(guavaht ${guavaht_SRC})
 target_link_libraries(guavaht model_static eal_static pthread rt ${femas_libs} ${femasmd_libs}  ${bson_libs} ${fc_libs})
