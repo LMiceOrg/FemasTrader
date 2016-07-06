@@ -60,6 +60,8 @@ struct multicast_info
 };
 
 
+#pragma pack(pop)
+
 typedef struct InstrumentTime{
     char InstrumentID[31];
     char   UpdateTime[9];
@@ -93,6 +95,5 @@ typedef struct IncQuotaData{
 }IncQuotaDataT, *pIncQuotaDataT;
 
 
-#pragma pack(pop)
 
 #endif /** GUAVAPROTO_H */

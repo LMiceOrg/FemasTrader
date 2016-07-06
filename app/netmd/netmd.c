@@ -36,6 +36,19 @@ void netmd_bf_delete(void);
 /* print usage of app */
 void print_usage(void);
 
+/* Daemon */
+int init_daemon(int silent);
+
+int init_daemon(int silent) {
+    if(!silent)
+        return 0;
+
+    if( daemon(0, 1) != 0) {
+        return -2;
+    }
+    return 0;
+}
+
 void print_usage(void) {
     printf("NetMD -- a md app --\n\n"
            "\t-h, --help\t\tshow this message\n"
@@ -43,6 +56,8 @@ void print_usage(void) {
            "\t-u, --uid\t\tset user id when running\n"
            "\t-s, --silent\t\trun in silent mode[backend]\n"
            "\t-f, --filter\t\tfilter to run pcap\n"
+           "\t-p, --position\t\tposition to catch symbol\n"
+           "\t-b, --bytes\t\tpackage size limitation\n"
            "\n"
            );
 }
@@ -73,6 +88,8 @@ void netmd_bf_delete(void) {
     bflter = NULL;
 }
 
+static int position = 11;
+static int bytes = sizeof(guava_udp_normal)+sizeof(guava_udp_head);
 
 int main(int argc, char* argv[]) {
     lmspi_t spi;
@@ -80,14 +97,13 @@ int main(int argc, char* argv[]) {
     int ret;
     int i;
     int silent = 0;
+
     char devname[64] = "p6p1";
     char filter[128] = "udp and port 30100";
 
+
     (void)argc;
     (void)argv;
-
-    printf("size :%lu\n", sizeof(IncQuotaDataT));
-    return 0;
 
 
     /** Process command line */
@@ -147,6 +163,26 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             ++i;
+        } else if(strcmp(cmd, "-p") == 0 ||
+                  strcmp(cmd, "--position") == 0) {
+            if(i+i<argc) {
+                cmd = argv[i+1];
+                position = atoi(cmd);
+            } else {
+                lmice_error_print("Command(%s) require position number\n", cmd);
+                return 1;
+            }
+            ++i;
+        } else if(strcmp(cmd, "-b") == 0 ||
+                  strcmp(cmd, "--bytes") == 0) {
+            if(i+i<argc) {
+                cmd = argv[i+1];
+                bytes = atoi(cmd);
+            } else {
+                lmice_error_print("Command(%s) require package size number\n", cmd);
+                return 1;
+            }
+            ++i;
         }
     } /* end-for: argc*/
 
@@ -169,6 +205,9 @@ int main(int argc, char* argv[]) {
 
     /** Register signal handler */
     lmspi_signal(spi, netmd_pcap_stop);
+
+    /* Silence */
+    init_daemon(silent);
 
     /** Run in main thread */
     netmd_pcap_thread(spi, devname, filter);
@@ -243,8 +282,10 @@ void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_c
     eal_bf_hash_val key;
     char symbol[32] = {0};
     lmspi_t spi = (lmspi_t)arg;
-    struct guava_udp_head* gh = (struct guava_udp_head*)(packet+42);
+    const char* data = (const char*)(packet+42);
+    struct guava_udp_head* gh = (struct guava_udp_head*)data;
     /*
+     * struct guava_udp_head* gh = (struct guava_udp_head*)(packet+42);
     struct guava_udp_normal *gn = (struct guava_udp_normal*)(packet+42+sizeof(guava_udp_head));
     struct guava_udp_summary *gs = (struct guava_udp_summary*)(packet+42+sizeof(guava_udp_head));
     */
@@ -253,7 +294,7 @@ void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_c
     (void)arg;
 
     /** check package state */
-    if(pkthdr->len < 42+sizeof(struct guava_udp_head)+sizeof(struct guava_udp_normal) )
+    if(pkthdr->len < 42+bytes )
         return;
 
     /** process guava head */
@@ -269,11 +310,12 @@ void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_c
     case 0x4:   /*4 summary信息 */
         break;
     default:
-        return;
+        break;
     }
 
+
     /** pub data */
-    netmd_pub_data(spi, gh->m_symbol, gh, pkthdr->len - 42);
+    netmd_pub_data(spi, data + position, data, pkthdr->len - 42);
 
 
 }
