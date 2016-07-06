@@ -149,7 +149,7 @@ int main(int argc, char* argv[]) {
             ++i;
         } else if(strcmp(cmd, "-f") == 0 ||
                   strcmp(cmd, "--filter") == 0) {
-            if(i+i<argc) {
+            if(i+1<argc) {
                 cmd = argv[i+1];
                 memset(filter, 0, sizeof(filter));
                 ret = strlen(cmd);
@@ -165,7 +165,7 @@ int main(int argc, char* argv[]) {
             ++i;
         } else if(strcmp(cmd, "-p") == 0 ||
                   strcmp(cmd, "--position") == 0) {
-            if(i+i<argc) {
+            if(i+1<argc) {
                 cmd = argv[i+1];
                 position = atoi(cmd);
             } else {
@@ -175,7 +175,7 @@ int main(int argc, char* argv[]) {
             ++i;
         } else if(strcmp(cmd, "-b") == 0 ||
                   strcmp(cmd, "--bytes") == 0) {
-            if(i+i<argc) {
+            if(i+1<argc) {
                 cmd = argv[i+1];
                 bytes = atoi(cmd);
             } else {
