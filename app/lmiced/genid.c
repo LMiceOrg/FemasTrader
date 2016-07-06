@@ -13,7 +13,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     for(ret = 1; ret < argc; ++ret) {
-        const char* cmd = argc[ret];
+        const char* cmd = argv[ret];
         uint64_t hval;
         char symbol[32] ={0};
         char ename[32] ={0};
