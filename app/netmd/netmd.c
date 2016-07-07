@@ -9,6 +9,7 @@
 #include <eal/lmice_trace.h>    /* EAL tracing */
 #include <eal/lmice_bloomfilter.h> /* EAL Bloomfilter */
 #include <eal/lmice_eal_hash.h>
+#include <eal/lmice_eal_thread.h>
 
 #include "guavaproto.h"
 
@@ -17,6 +18,20 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 
+#if defined(__linux__)
+#define _GNU_SOURCE             /* See feature_test_macros(7) */
+#include <sched.h>
+
+static int netmd_set_cpuset(int* cpuid, int count) {
+    int i;
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    for(i=0; i<count; ++i) {
+        CPU_SET(*(cpuid+i), &mask );
+    }
+    return sched_setaffinity(0, sizeof(mask), &mask );
+}
+#endif
 pcap_t* pcapHandle = NULL;
 
 lm_bloomfilter_t* bflter = NULL;
@@ -178,6 +193,35 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             i+=3;
+        } else if(strcmp(cmd, "-c") == 0 ||
+                  strcmp(cmd, "--cpuset") == 0) {
+            if(i+1 < argc) {
+                int cpuset[8];
+                int setcount = 0;
+                cmd = argv[i+1];
+
+                do {
+                    if(setcount >=8)
+                        break;
+                    cpuset[setcount] = atoi(cmd);
+                    ++setcount;
+                    while(*cmd != NULL) {
+                        if(*cmd != ',') {
+                            ++cmd;
+                        } else {
+                            ++cmd;
+                            break;
+                        }
+                    }
+                } while(*cmd != NULL);
+
+                ret = netmd_set_cpuset(cpuset, setcount);
+                lmice_critical_print("set CPUset %d return %d\n", setcount, ret);
+
+            } else {
+                lmice_error_print("Command(%s) require cpuset param, separated by comma(,)\n", cmd);
+            }
+            ++i;
         }
     } /* end-for: argc*/
 
@@ -272,6 +316,7 @@ void print_usage(void) {
            "\t-p, --position\t\tposition to catch symbol\n"
            "\t-b, --bytes\t\tpackage size limitation\n"
            "\t-m, --multicast\t\tmulticast group, bind ip, port\n"
+           "\t-c, --cpuset\t\tSet cpuset for this app(, separated)\n"
            "\n"
            );
 }
@@ -411,7 +456,7 @@ static int key_compare(const void* key, const void* obj) {
         return 1;
 }
 
-forceinline int key_find_and_create(const char* symbol) {
+forceinline int key_find_or_create(const char* symbol) {
     uint64_t hval;
     uint64_t *key;
     hval = eal_hash64_fnv1a(symbol, 32);
@@ -442,7 +487,7 @@ forceinline void netmd_pub_data(lmspi_t spi, const char* sym, const void* addr, 
     strncat(symbol, sym, 16);
 
     /* calc bf key */
-    ret = key_find_and_create(symbol);
+    ret = key_find_or_create(symbol);
     if(ret == 0) {
         lmspi_send(spi, symbol, addr, len);
     } else if(ret == 1) {
