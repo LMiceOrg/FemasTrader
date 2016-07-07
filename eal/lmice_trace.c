@@ -45,7 +45,7 @@ lmice_trace_name_t lmice_trace_name[] =
     get_system_time(&_trace_stm);   \
     sprintf(_trace_current_time, "%011ld-%03ld:%03ld:%03ld", _trace_stm / 10000000, \
         (_trace_stm % 10000000) / 10000,   \
-        (_trace_stm % 10000) / 1000),   \
+        (_trace_stm % 10000) / 10,   \
         (_trace_stm % 10) * 100 );  \
     /*change newline to space */ \
     _trace_ret = pthread_getname_np(eal_gettid(), _trace_thread_name, 32); \
