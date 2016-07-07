@@ -323,13 +323,13 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
     for(size_t i=0; i<100; ++i) {
         ret = eal_shm_open_readwrite(&p->board);
         if(ret != 0) {
-            lmice_warning_print("Open shm[%s] failed[%d], Waitting[lu]\n", p->board.name, ret, i);
+            lmice_warning_print("Open shm[%s] failed[%d], Waitting[%lu]\n", p->board.name, ret, i);
             usleep(10000*(i+1));
             continue;
         }
         ret = eal_event_open(&p->event);
         if(ret != 0) {
-            lmice_warning_print("Open evt[%s] failed[%d], Waitting[lu]\n", p->event.name, ret, i);
+            lmice_warning_print("Open evt[%s] failed[%d], Waitting[%lu]\n", p->event.name, ret, i);
             usleep(10000*(i+1));
             continue;
         }

@@ -1,5 +1,6 @@
 #include "lmice_trace.h"
-
+#include "lmice_eal_time.h"
+#include <stdint.h>
 
 #if defined(_DEBUG)
 const int lmice_trace_debug_mode = 1;
@@ -33,16 +34,20 @@ lmice_trace_name_t lmice_trace_name[] =
 #endif
 
 #define EAL_TRACE_0() \
+    int64_t _trace_stm; \
     int _trace_ret; \
     time_t _trace_tm;   \
     char _trace_current_time[26]; \
     char _trace_thread_name[32]; \
     if(lmice_trace_debug_mode == 0 && type == lmice_trace_debug) \
         return; \
-    time(&_trace_tm); \
-    ctime_r(&_trace_tm, _trace_current_time); \
+    memset(_trace_current_time, 0, 26); \
+    get_system_time(&_trace_stm);   \
+    sprintf(_trace_current_time, "%011ld-%03ld:%03ld:%03ld", _trace_stm / 10000000, \
+        (_trace_stm % 10000000) / 10000,   \
+        (_trace_stm % 10000) / 1000),   \
+        (_trace_stm % 10) * 100 );  \
     /*change newline to space */ \
-    _trace_current_time[24] = ' '; \
     _trace_ret = pthread_getname_np(eal_gettid(), _trace_thread_name, 32); \
     if(_trace_ret == 0) { \
         if( strlen(_trace_thread_name) == 0) _trace_ret = -1; \
@@ -65,7 +70,7 @@ lmice_trace_name_t lmice_trace_name[] =
             _trace_current_time, LMICE_TRACE_COLOR_TAG3(type), getpid(), _trace_thread_name); \
     } else { \
         printf("%s%s%s%s:[%d:0x%lx]",    \
-            _trace_current_time, LMICE_TRACE_COLOR_TAG3(type), getpid(), eal_gettid()); \
+            _trace_current_time, LMICE_TRACE_COLOR_TAG3(type), getpid(), (void*)eal_gettid()); \
     }
 #endif
 
