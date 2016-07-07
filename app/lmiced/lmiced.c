@@ -151,6 +151,7 @@ int main(int argc, char* argv[]) {
         lmice_error_log("Shm board init failed\n");
         return ret;
     }
+    memset(g_server.board.addr, 0, g_server.board.size);
 
     /* Create event thread */
     eal_thread_malloc_context(tctx[0]);
