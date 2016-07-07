@@ -66,6 +66,7 @@ void print_usage(void) {
            "\t-f, --filter\t\tfilter to run pcap\n"
            "\t-p, --position\t\tposition to catch symbol\n"
            "\t-b, --bytes\t\tpackage size limitation\n"
+           "\t-m, --multicast\t\tmulticast group, bind ip, port\n"
            "\n"
            );
 }
@@ -106,7 +107,10 @@ int main(int argc, char* argv[]) {
     int i;
     int silent = 0;
 
-    int m_sock;
+    int mc_sock = 0;
+    int mc_port = 30100;/* 5001*/
+    int mc_group[32]="233.54.1.100"; /*238.0.1.2*/
+    char mc_bindip[32]="192.168.208.16";/*10.10.21.191*/
 
     char devname[64] = "p6p1";
     char filter[128] = "udp and port 30100";
@@ -116,27 +120,6 @@ int main(int argc, char* argv[]) {
     (void)argv;
 
     keypos = 0;
-
-    {
-        struct ip_mreq mreq;
-        struct sockaddr_in local_addr;
-        int flag=1;
-        m_sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&flag, sizeof(flag));
-
-        memset(&local_addr, 0, sizeof(local_addr));
-        local_addr.sin_family = AF_INET;
-        local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-        local_addr.sin_port = htons(5001);	//multicast port
-        bind(m_sock, (struct sockaddr*)&local_addr, sizeof(local_addr));
-
-
-        mreq.imr_multiaddr.s_addr = inet_addr("238.0.1.2");	//multicast group ip
-        mreq.imr_interface.s_addr = inet_addr("10.10.21.191");
-
-        setsockopt(m_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
-
-    }
 
     /** Process command line */
     for(i=0; i< argc; ++i) {
@@ -215,6 +198,22 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             ++i;
+        } else if(strcmp(cmd, "-m") == 0 ||
+                 strcmp(cmd, "--multicast") == 0) {
+            if(i+3<argc) {
+                cmd = argv[i+1];
+                memset(mc_group, 0, sizeof(mc_group));
+                strncpy(mc_group, cmd, 32);
+                cmd=argv[i+2];
+                memset(mc_bindip, 0, sizeof(mc_bindip));
+                strncpy(mc_bindip, cmd, 32);
+                cmd=argv[i+3];
+                mc_port = atoi(cmd);
+            } else {
+                lmice_error_print("Command(%s) require multicast group, bind ip, port parameter(3)\n");
+                return 1;
+            }
+            i+=3;
         }
     } /* end-for: argc*/
 
@@ -222,6 +221,28 @@ int main(int argc, char* argv[]) {
 
     /** Silence mode */
     init_daemon(silent);
+
+    /** Join MCast group */
+    {
+        struct ip_mreq mreq;
+        struct sockaddr_in local_addr;
+        int flag=1;
+        mc_sock = socket(PF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        setsockopt(mc_sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&flag, sizeof(flag));
+
+        memset(&local_addr, 0, sizeof(local_addr));
+        local_addr.sin_family = AF_INET;
+        local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+        local_addr.sin_port = htons(mc_port);	//multicast port
+        bind(mc_sock, (struct sockaddr*)&local_addr, sizeof(local_addr));
+
+
+        mreq.imr_multiaddr.s_addr = inet_addr(mc_group);	//multicast group ip
+        mreq.imr_interface.s_addr = inet_addr(mc_bindip);
+
+        setsockopt(mc_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
+
+    }
 
     /** Create LMiced spi */
     spi = lmspi_create("[md]netmd", -1);
@@ -386,6 +407,7 @@ forceinline void netmd_pub_data(lmspi_t spi, const char* sym, const void* addr, 
     //if(eal_bf_find(bflter, key) == 0) {
     if(findit) {
         lmspi_send(spi, symbol, addr, len);
+        lmice_info_print("send [%s] size [%d]\n", symbol, len);
     } else {
         /* publish the new symbol */
         lmspi_publish(spi, symbol);

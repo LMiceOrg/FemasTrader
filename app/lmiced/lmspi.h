@@ -114,7 +114,7 @@ class CLMSpi
 {
 public:
     CLMSpi(const char* name="Model", int poolsize=0);
-    void deleteSpi(void);
+    void delete_spi(void);
     //virtual ~CLMSpi();
 
     void logging(const char* format, ...);

@@ -349,7 +349,7 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
 
 }
 
-void CLMSpi::deleteSpi()
+void CLMSpi::delete_spi()
 {
     spi_private* p = (spi_private*)m_priv;
     uds_msg *sid = &p->sid;
