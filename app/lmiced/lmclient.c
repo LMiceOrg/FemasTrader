@@ -131,16 +131,9 @@ int lm_clientlist_find_or_create(clientlist_t *cl, struct sockaddr_un *addr, cli
     socklen_t addr_len = SUN_LEN(addr);
 
     eal_spin_lock(&cl->lock);
+    /* Find client */
     do {
-
-        /* Find an empty slot, may use it after */
-        if(cur->count < CLIENT_COUNT && ncli == NULL) {
-            ncur = cur;
-            ncli = &ncur->cli[ncur->count];
-            newslot = 1;
-        }
-
-        for(i=0; i<cur->count; ++i) {
+        for(i=0; i<CLIENT_COUNT; ++i) {
             if(cur->cli[i].addr_len == addr_len &&
                     memcmp(&(cur->cli[i].addr), addr, addr_len) == 0 &&
                     cur->cli[i].active == CLIENT_ALIVE ) {
@@ -149,69 +142,68 @@ int lm_clientlist_find_or_create(clientlist_t *cl, struct sockaddr_un *addr, cli
                 break;
             }
             /* Find dead slot, may use it after */
-            if(cur->cli[i].active == CLIENT_DEAD) {
+            if(cur->cli[i].active == CLIENT_DEAD && newslot == 0) {
                 ncur = cur;
                 ncli = &cur->cli[i];
-                newslot = 0;
-            }
-        }
-
-        /* Does not exist */
-        if(cli == NULL && cur->next == NULL) {
-            /* No empty slot, so create a new one */
-            if(ncli == NULL) {
-                cur->next = lm_clientlist_create();
-                ncur = cur->next;
-                ncli = ncur->cli;
                 newslot = 1;
             }
+        }
+        ncur = cur;
+        cur = cur->next;
+    } while(cur != NULL && cli == NULL);
 
-            /* Init client:IC */
-            memset(ncli, 0, sizeof(client_t));
-            memcpy(&ncli->addr, addr, addr_len);
-            ncli->addr_len = addr_len;
+    /* Does not exist */
+    if(cli == NULL && cur->next == NULL) {
+        /* No empty slot, so create a new one */
+        if(ncli == NULL && ncur!=NULL) {
+            ncur->next = lm_clientlist_create();
+            ncli = ncur->cli;
+            newslot = 1;
+        }
+
+        /* Init client:IC */
+        memset(ncli, 0, sizeof(client_t));
+        memcpy(&ncli->addr, addr, addr_len);
+        ncli->addr_len = addr_len;
 
 
-            /* IC1: Create board shared memory */
-            hval = eal_hash64_fnv1a(addr, addr_len);
-            eal_shm_hash_name(hval, ncli->board.name);
-            ncli->board.size = BOARD_SHMSIZE;
-            ret = eal_shm_create(&ncli->board);
+        /* IC1: Create board shared memory */
+        hval = eal_hash64_fnv1a(addr, addr_len);
+        eal_shm_hash_name(hval, ncli->board.name);
+        ncli->board.size = BOARD_SHMSIZE;
+        ret = eal_shm_create(&ncli->board);
+        if(ret == 0) {
+            /* IC2: Create private semaphore */
+            ret = eal_eventp_init((evtfd_t)ncli->board.addr);
             if(ret == 0) {
-                /* IC2: Create private semaphore */
-                ret = eal_eventp_init((evtfd_t)ncli->board.addr);
+                /* IC3: Create public semaphore */
+                eal_event_hash_name(hval, ncli->event.name);
+                ret = eal_event_create(&ncli->event);
                 if(ret == 0) {
-                    /* IC3: Create public semaphore */
-                    eal_event_hash_name(hval, ncli->event.name);
-                    ret = eal_event_create(&ncli->event);
-                    if(ret == 0) {
-                        if(newslot == 1) {
-                            ++ncur->count;
-                        }
-                        ncli->active = CLIENT_ALIVE;
-                        cli = ncli;
-                    } else {
-                        lmice_error_log("IC3 create event[%s] failed[%d]", ncli->event.name, ret);
-                        /* Clean IC2 evt*/
-                        eal_eventp_close((evtfd_t)ncli->board.addr);
-                        /* Clean IC1 shm*/
-                        eal_shm_destroy(&ncli->board);
+                    if(newslot == 1) {
+                        ++ncur->count;
                     }
+                    ncli->active = CLIENT_ALIVE;
+                    cli = ncli;
                 } else {
-                    lmice_error_log("IC2 create event failed[%d]", ret);
+                    lmice_error_log("IC3 create event[%s] failed[%d]", ncli->event.name, ret);
+                    /* Clean IC2 evt*/
+                    eal_eventp_close((evtfd_t)ncli->board.addr);
                     /* Clean IC1 shm*/
                     eal_shm_destroy(&ncli->board);
                 }
             } else {
-                lmice_error_log("IC1 create client board shm[%s] failed[%d]", ncli->board.name, ret);
+                lmice_error_log("IC2 create event failed[%d]", ret);
+                /* Clean IC1 shm*/
+                eal_shm_destroy(&ncli->board);
             }
-
-
-            break;
+        } else {
+            lmice_error_log("IC1 create client board shm[%s] failed[%d]", ncli->board.name, ret);
         }
 
-        cur = cur->next;
-    } while(cur != NULL && cli == NULL);
+    }
+
+
     eal_spin_unlock(&cl->lock);
 
     *ppc = cli;
@@ -257,9 +249,7 @@ int lm_clientlist_find_pid(clientlist_t *sl, pid_t pid, client_t **ppc)
     eal_spin_lock(&sl->lock);
     do {
         for(i=0; i<cur->count; ++i) {
-            if(cur->cli[i].pid == pid) {
-
-                if(cur->cli[i].active == CLIENT_ALIVE)
+            if(cur->cli[i].pid == pid && cur->cli[i].active == CLIENT_ALIVE) {
                     ps = &cur->cli[i];
                 /* Find it */
                 break;
@@ -363,6 +353,10 @@ int lm_client_find_or_create(client_t *cli, pubsub_shm_t *ps, const char *symbol
     symbol_shm_t* sym = NULL;
     uint64_t hval;
     size_t i;
+
+    if(cli->active == CLIENT_DEAD)
+        return 1;
+
     hval = eal_hash64_fnv1a(symbol, SYMBOL_LENGTH);
 
     eal_spin_lock(&cli->lock);

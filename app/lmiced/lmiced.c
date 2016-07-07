@@ -584,8 +584,12 @@ forceinline void proc_msg(uds_msg* msg) {
 		clientlist_t* cur = ser->clilist;
 		do {
 			size_t j;
-			for (i = 0; i<cur->count; ++i) {
+            for (i = 0; i<CLIENT_COUNT; ++i) {
 				client_t* cli = &cur->cli[i];
+
+                if(cli->active == CLIENT_DEAD)
+                    continue;
+
 				for (j = 0; j<cli->count; ++j) {
 					symbol_shm_t *sym = &cli->symshm[j];
 					pubsub_shm_t* ps = sym->ps;
