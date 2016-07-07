@@ -437,9 +437,9 @@ static int key_compare(const void* key, const void* obj) {
     const uint64_t* hval = (const uint64_t*)key;
     const uint64_t* val = (const uint64_t*)obj;
 
-    if(hval == val)
+    if(*hval == *val)
         return 0;
-    else if(hval < val)
+    else if(*hval < *val)
         return -1;
     else
         return 1;
