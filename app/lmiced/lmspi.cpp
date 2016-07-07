@@ -1288,6 +1288,7 @@ lmspi_t lmspi_create(const char* name, int poolsize) {
 
 void lmspi_delete(lmspi_t spi) {
     CLMSpi * pt = (CLMSpi *)spi;
+    pt->delete_spi();
     delete pt;
 }
 

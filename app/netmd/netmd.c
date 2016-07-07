@@ -13,8 +13,9 @@
 #include "guavaproto.h"
 
 #include <sys/socket.h>
-#include <sys/types.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/types.h>
 
 pcap_t* pcapHandle = NULL;
 
@@ -173,7 +174,7 @@ int main(int argc, char* argv[]) {
                 cmd=argv[i+3];
                 mc_port = atoi(cmd);
             } else {
-                lmice_error_print("Command(%s) require multicast group, bind ip, port parameter(3)\n");
+                lmice_error_print("Command(%s) require mc_group, bind_ip port param(3)\n", cmd);
                 return 1;
             }
             i+=3;
