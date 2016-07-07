@@ -20,8 +20,6 @@ pcap_t* pcapHandle = NULL;
 
 lm_bloomfilter_t* bflter = NULL;
 
-uint64_t keylist[512];
-int keypos;
 
 /* netmd package callback */
 void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_char* packet);
@@ -60,6 +58,7 @@ int init_daemon(int silent) {
 void print_usage(void) {
     printf("NetMD -- a md app --\n\n"
            "\t-h, --help\t\tshow this message\n"
+           "\t-n, --name\t\tset module name\n"
            "\t-d, --device\t\tset adapter device name\n"
            "\t-u, --uid\t\tset user id when running\n"
            "\t-s, --silent\t\trun in silent mode[backend]\n"
@@ -72,11 +71,11 @@ void print_usage(void) {
 }
 
 void netmd_bf_create(void) {
-    uint64_t n = 512;
+    uint64_t n = MAX_KEY_LENGTH;
     uint32_t m = 0;
     uint32_t k = 0;
     double f = 0.0001;
-    /* 512 items, and with 0.0001 false positive */
+    /* MAX_KEY_LENGTH items, and with 0.0001 false positive */
     eal_bf_calculate(n, f, &m, &k, &f);
 
     bflter = (lm_bloomfilter_t*)malloc(sizeof(lm_bloomfilter_t)+m);
@@ -99,6 +98,10 @@ void netmd_bf_delete(void) {
 
 static int position = 11;
 static int bytes = sizeof(struct guava_udp_normal)+sizeof(struct guava_udp_head);
+static char md_name[32];
+#define MAX_KEY_LENGTH 512
+static uint64_t keylist[MAX_KEY_LENGTH];
+static volatile int keypos;
 
 int main(int argc, char* argv[]) {
     lmspi_t spi;
@@ -115,11 +118,12 @@ int main(int argc, char* argv[]) {
     char devname[64] = "p6p1";
     char filter[128] = "udp and port 30100";
 
-
     (void)argc;
     (void)argv;
 
     keypos = 0;
+    memset(md_name, 0, sizeof(md_name));
+    strncpy(md_name, "[netmd]", sizeof(md_name)-1);
 
     /** Process command line */
     for(i=0; i< argc; ++i) {
@@ -128,6 +132,16 @@ int main(int argc, char* argv[]) {
                 strcmp(cmd, "--help") == 0) {
             print_usage();
             return 0;
+        } else if(strcmp(cmd, "-n") == 0 ||
+                  strcmp(cmd, "--name") == 0) {
+            if(i+1<argc) {
+                cmd=argv[i+1];
+                memset(md_name, 0, sizeof(md_name));
+                strncat(md_name, cmd, sizeof(md_name)-1);
+            } else {
+                lmice_error_print("Command(%s) require module name\n", cmd);
+                return 1;
+            }
         } else if(strcmp(cmd, "-d") == 0 ||
                   strcmp(cmd, "--device") == 0) {
             if(i+1<argc) {
@@ -136,8 +150,8 @@ int main(int argc, char* argv[]) {
                     lmice_error_print("Adapter device name is too long(>63)\n");
                     return 1;
                 }
-                memset(devname, 0, 64);
-                strncpy(devname, cmd, strlen(cmd));
+                memset(devname, 0, sizeof(devname));
+                strncat(devname, cmd, sizeof(devname)-1);
             } else {
                 lmice_error_print("Command(%s) require device name\n", cmd);
                 return 1;
@@ -245,8 +259,8 @@ int main(int argc, char* argv[]) {
     }
 
     /** Create LMiced spi */
-    spi = lmspi_create("[md]netmd", -1);
-    lmice_info_print("[md]netmd startting in adapter[%s]. filter[%s]..\n", devname, filter);
+    spi = lmspi_create(md_name, -1);
+    lmice_info_print("%s startting in adapter[%s]. filter[%s]..\n", md_name, devname, filter);
     if(uid != -1) {
         ret = seteuid(getuid());
         if(ret != 0) {
@@ -280,7 +294,7 @@ int main(int argc, char* argv[]) {
     lmspi_delete(spi);
     netmd_bf_delete();
 
-    lmice_critical_print("[md]netmd exit\n");
+    lmice_critical_print("%s exit\n", md_name);
 
 
     return 0;
@@ -390,8 +404,8 @@ forceinline void netmd_pub_data(lmspi_t spi, const char* sym, const void* addr, 
     int findit = 0;
 
     /* construct symbol */
-    strcat(symbol, "[netmd]");
-    strcat(symbol, sym);
+    strncat(symbol, md_name, 16);
+    strncat(symbol, sym, 16);
 
     /* calc bf key */
     hval = eal_hash64_fnv1a(symbol, 32);
@@ -412,14 +426,12 @@ forceinline void netmd_pub_data(lmspi_t spi, const char* sym, const void* addr, 
         /* publish the new symbol */
         lmspi_publish(spi, symbol);
         //eal_bf_add(bflter, key);
-        if(keypos >= 512) {
+        if(keypos >= MAX_KEY_LENGTH) {
             lmice_error_print("keylist is full\n");
         } else {
             keylist[keypos] = hval;
             ++keypos;
         }
-
-        usleep(1000);
         lmspi_send(spi, symbol, addr, len);
     }
 }

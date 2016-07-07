@@ -320,17 +320,17 @@ CLMSpi::CLMSpi(const char *name, int poolsize)
 
     eal_shm_hash_name(hval, p->board.name);
     eal_event_hash_name(hval, p->event.name);
-    for(size_t i=0; i<3; ++i) {
+    for(size_t i=0; i<100; ++i) {
         ret = eal_shm_open_readwrite(&p->board);
         if(ret != 0) {
-            lmice_error_print("Open shm[%s] failed[%d]\n", p->board.name, ret);
-            usleep(10000);
+            lmice_warning_print("Open shm[%s] failed[%d], Waitting[lu]\n", p->board.name, ret, i);
+            usleep(10000*(i+1));
             continue;
         }
         ret = eal_event_open(&p->event);
         if(ret != 0) {
-            lmice_error_print("Open evt[%s] failed[%d]\n", p->event.name, ret);
-            usleep(10000);
+            lmice_warning_print("Open evt[%s] failed[%d], Waitting[lu]\n", p->event.name, ret, i);
+            usleep(10000*(i+1));
             continue;
         }
     }
@@ -588,7 +588,7 @@ void CLMSpi::subscribe(const char *symbol)
 
     //Try awake lmiced with event
     bool sended = false;
-    ret = eal_spin_lock(&pd->lock);
+    ret = eal_spin_trylock(&pd->lock);
     if( ret == 0) {
         if(pd->count < SYMLIST_LENGTH) {
             lmice_symbol_detail_t *dt = pd->sym + pd->count;
@@ -671,7 +671,7 @@ void CLMSpi::unsubscribe(const char *symbol)
 
     //Try awake lmiced with event
     bool sended = false;
-    ret = eal_spin_lock(&pd->lock);
+    ret = eal_spin_trylock(&pd->lock);
     if( ret == 0) {
         if(pd->count < SYMLIST_LENGTH) {
             lmice_symbol_detail_t *dt = pd->sym + pd->count;
@@ -754,7 +754,7 @@ void CLMSpi::publish(const char *symbol)
 
     //Try awake lmiced with event
     bool sended = false;
-    ret = eal_spin_lock(&pd->lock);
+    ret = eal_spin_trylock(&pd->lock);
     if( ret == 0) {
         if(pd->count < SYMLIST_LENGTH) {
             lmice_symbol_detail_t *dt = pd->sym + pd->count;
@@ -835,7 +835,7 @@ void CLMSpi::unpublish(const char *symbol)
 
     //Try awake lmiced with event
     bool sended = false;
-    ret = eal_spin_lock(&pd->lock);
+    ret = eal_spin_trylock(&pd->lock);
     if( ret == 0) {
         if(pd->count < SYMLIST_LENGTH) {
             lmice_symbol_detail_t *dt = pd->sym + pd->count;
@@ -942,11 +942,11 @@ void CLMSpi::send(const char *symbol, const void *addr, int len)
     }
 
     char sym[SYMBOL_LENGTH] = {0};
-    char name[SYMBOL_LENGTH] ={0};
+    //char name[SYMBOL_LENGTH] ={0};
     uint64_t hval;
-    strcpy(sym, symbol);
+    strncpy(sym, symbol, SYMBOL_LENGTH - 1);
     hval = eal_hash64_fnv1a(sym, SYMBOL_LENGTH);
-    eal_shm_hash_name(hval, name);
+    //eal_shm_hash_name(hval, name);
 
     spi_shm_t*ps = NULL;
     lmice_shm_t*shm;
