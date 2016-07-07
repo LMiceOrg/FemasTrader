@@ -18,20 +18,6 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 
-#if defined(__linux__)
-#define _GNU_SOURCE             /* See feature_test_macros(7) */
-#include <sched.h>
-
-static int netmd_set_cpuset(int* cpuid, int count) {
-    int i;
-    cpu_set_t mask;
-    CPU_ZERO(&mask);
-    for(i=0; i<count; ++i) {
-        CPU_SET(*(cpuid+i), &mask );
-    }
-    return sched_setaffinity(0, sizeof(mask), &mask );
-}
-#endif
 pcap_t* pcapHandle = NULL;
 
 lm_bloomfilter_t* bflter = NULL;
@@ -215,7 +201,7 @@ int main(int argc, char* argv[]) {
                     }
                 } while(*cmd != 0);
 
-                ret = netmd_set_cpuset(cpuset, setcount);
+                ret = lmspi_cpuset(NULL, cpuset, setcount);
                 lmice_critical_print("set CPUset %d return %d\n", setcount, ret);
 
             } else {

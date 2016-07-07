@@ -73,6 +73,9 @@ SPICFUN void lmspi_send(lmspi_t spi, const char* symbol, const void* addr, int l
 // 信号函数
 SPICFUN void lmspi_signal(lmspi_t spi, sig_t sigfunc);
 
+//设置进程亲缘性
+SPICFUN int lmspi_cpuset(lmspi_t spi, const int* cpuset, int cpucount);
+
 #ifdef __cplusplus
 }
 #endif
@@ -142,6 +145,8 @@ public:
     int quit();
 
     int isquit();
+
+    int set_cpuset(const int* cpuset, int setcount);
 
 
 

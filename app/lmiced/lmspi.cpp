@@ -1,3 +1,12 @@
+#if defined(__linux__)
+#define _GNU_SOURCE
+#include <sched.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#endif
+
 #include "lmspi.h"
 #include "fmspi.h"
 #include "udss.h"
@@ -1173,6 +1182,28 @@ int CLMSpi::isquit()
     return quit_flag;
 }
 
+#if defined(__linux__)
+static int netmd_set_cpuset(const int* cpuid, int count) {
+    int i;
+    cpu_set_t mask;
+    memset(&mask, 0, sizeof(mask));
+    for(i=0; i<count; ++i) {
+        CPU_SET(*(cpuid+i), &mask );
+    }
+    return sched_setaffinity(0, sizeof(mask), &mask );
+}
+#else
+static int netmd_set_cpuset(const int* cpuid, int count) {
+    return 0;
+}
+
+#endif
+
+int CLMSpi::set_cpuset(const int *cpuset, int setcount)
+{
+    return netmd_set_cpuset(cpuset, setcount);
+}
+
 //int CLMSpi::order(const char *symbol, int dir, double price, int num)
 //{
 //    //CTraderSpi* spi = static_cast<CTraderSpi*>(this);
@@ -1378,4 +1409,9 @@ void lmspi_send(lmspi_t spi, const char* symbol, const void* addr, int len) {
 void lmspi_signal(lmspi_t spi, sig_t sigfunc) {
     CLMSpi * pt = (CLMSpi *)spi;
     pt->register_signal(sigfunc);
+}
+
+int lmspi_cpuset(lmspi_t spi, const int* cpuset, int cpucount) {
+    (void)spi;
+    return netmd_set_cpuset(cpuset, cpucount);
 }
