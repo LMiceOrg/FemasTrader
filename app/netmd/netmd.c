@@ -10,6 +10,7 @@
 #include <eal/lmice_bloomfilter.h> /* EAL Bloomfilter */
 #include <eal/lmice_eal_hash.h>
 #include <eal/lmice_eal_thread.h>
+#include <eal/lmice_eal_spinlock.h>
 
 #include "guavaproto.h"
 
@@ -53,6 +54,7 @@ static char md_name[32];
 #define MAX_KEY_LENGTH 512
 static uint64_t keylist[MAX_KEY_LENGTH];
 static volatile int keypos;
+static volatile int64_t netmd_pd_lock = 0;
 
 int main(int argc, char* argv[]) {
     lmspi_t spi;
@@ -72,6 +74,7 @@ int main(int argc, char* argv[]) {
     (void)argc;
     (void)argv;
 
+    netmd_pd_lock = 0;
     keypos = 0;
     memset(md_name, 0, sizeof(md_name));
     strncpy(md_name, "[netmd]", sizeof(md_name)-1);
@@ -480,7 +483,9 @@ forceinline void netmd_pub_data(lmspi_t spi, const char* sym, const void* addr, 
     strncat(symbol, sym, 16);
 
     /* calc bf key */
+    eal_spin_lock(&netmd_pd_lock);
     ret = key_find_or_create(symbol);
+    eal_spin_unlock(&netmd_pd_lock);
     if(ret == 0) {
         lmspi_send(spi, symbol, addr, len);
     } else if(ret == 1) {
