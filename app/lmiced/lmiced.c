@@ -851,6 +851,8 @@ void event_thread(void* ptr) {
                     symbol_shm_t* sym = &cli->symshm[j];
                     pubsub_shm_t* shm = sym->ps;
                     if(shm->hval == publist[ipub].hval && sym->type & SHM_SUB_TYPE) {
+                        if(cli->active == CLIENT_DEAD)
+                            break;/* dead client */
 
                         lmice_sub_data_t* dt = (lmice_sub_data_t*)((char*)cli->board.addr + CLIENT_SUBPOS);
                         eal_spin_lock(&dt->lock);

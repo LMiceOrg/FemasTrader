@@ -109,9 +109,9 @@ int lm_clientlist_unregister(clientlist_t *cl, struct sockaddr_un *addr, client_
     ret = lm_clientlist_find(cl, addr, &cli);
     if(ret == 0 && cli != NULL) {
         cli->active = CLIENT_DEAD;
+        CLIENT_RECOVER_PUB_RIGHT(cli);
         CLIENT_TERM_PROCESS(cli, ret);
         CLIENT_RECOVER_RESOURCE(cli, ret);
-        CLIENT_RECOVER_PUB_RIGHT(cli);
         *ppc = cli;
     }
     return ret;
