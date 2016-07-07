@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
 
     int mc_sock = 0;
     int mc_port = 30100;/* 5001*/
-    int mc_group[32]="233.54.1.100"; /*238.0.1.2*/
+    char mc_group[32]="233.54.1.100"; /*238.0.1.2*/
     char mc_bindip[32]="192.168.208.16";/*10.10.21.191*/
 
     char devname[64] = "p6p1";
