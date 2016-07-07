@@ -13,7 +13,6 @@ static void print_usage(void);
 /* Daemon */
 static int init_daemon(int silent);
 
-#define
 
 int main(int argc, char* argv[]) {
     int i;
@@ -24,6 +23,8 @@ int main(int argc, char* argv[]) {
     for(i=1; i<argc; ++i) {
 
     }
+
+    return 0;
 }
 
 void print_usage(void) {

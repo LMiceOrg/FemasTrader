@@ -37,13 +37,16 @@ lmice_trace_name_t lmice_trace_name[] =
     int64_t _trace_stm; \
     int _trace_ret; \
     time_t _trace_tm;   \
-    char _trace_current_time[26]; \
+    char _trace_current_time[40]; \
     char _trace_thread_name[32]; \
     if(lmice_trace_debug_mode == 0 && type == lmice_trace_debug) \
         return; \
-    memset(_trace_current_time, 0, 26); \
+    memset(_trace_current_time, 0, 40); \
     get_system_time(&_trace_stm);   \
-    sprintf(_trace_current_time, "%011ld-%03ld:%03ld:%03ld", _trace_stm / 10000000, \
+    _trace_tm =_trace_stm / 10000000;   \
+    ctime_r(&_trace_tm, _trace_current_time); \
+    _trace_current_time[24] = ' '; \
+    sprintf(_trace_current_time+25, "%03ld:%03ld:%03ld", _trace_stm / 10000000, \
         (_trace_stm % 10000000) / 10000,   \
         (_trace_stm % 10000) / 10,   \
         (_trace_stm % 10) * 100 );  \

@@ -23,28 +23,28 @@ lm_bloomfilter_t* bflter = NULL;
 
 
 /* netmd package callback */
-void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_char* packet);
+static void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_char* packet);
 
 /* netmd worker thread */
-int netmd_pcap_thread(lmspi_t spi, const char *devname, const char *packet_filter);
+static int netmd_pcap_thread(lmspi_t spi, const char *devname, const char *packet_filter);
 
 /* stop netmd worker */
-void netmd_pcap_stop(int sig);
+static void netmd_pcap_stop(int sig);
 
 /* publish data */
 forceinline void netmd_pub_data(lmspi_t spi, const char* symbol, const void* addr, int len);
 
 /* create bloom filter for net md */
-void netmd_bf_create(void);
+static void netmd_bf_create(void);
 
 /* delete bloom filter */
-void netmd_bf_delete(void);
+static void netmd_bf_delete(void);
 
 /* print usage of app */
-void print_usage(void);
+static void print_usage(void);
 
 /* Daemon */
-int init_daemon(int silent);
+static int init_daemon(int silent);
 
 static int position = 11;
 static int bytes = sizeof(struct guava_udp_normal)+sizeof(struct guava_udp_head);
@@ -221,7 +221,7 @@ int main(int argc, char* argv[]) {
     }
 
     /** Create bloom filter */
-    netmd_bf_create();
+    //netmd_bf_create();
 
     /** Register signal handler */
     lmspi_signal(spi, netmd_pcap_stop);
@@ -242,7 +242,7 @@ int main(int argc, char* argv[]) {
     /** Exit and maintain resource */
     lmspi_quit(spi);
     lmspi_delete(spi);
-    netmd_bf_delete();
+    //netmd_bf_delete();
 
     lmice_critical_print("%s exit\n", md_name);
 
@@ -399,42 +399,55 @@ void netmd_pcap_stop(int sig) {
     }
 }
 
+static int key_compare(const void* key, const void* obj) {
+    const uint64_t* hval = (const uint64_t*)key;
+    const uint64_t* val = (const uint64_t*)obj;
+
+    if(hval == val)
+        return 0;
+    else if(hval < val)
+        return -1;
+    else
+        return 1;
+}
+
+forceinline int key_find_and_create(const char* symbol) {
+    uint64_t hval;
+    uint64_t *key;
+    hval = eal_hash64_fnv1a(symbol, 32);
+    key = (uint64_t*)bsearch(&hval, keylist, keypos, 8, key_compare);
+    if(key == NULL) {
+        /* create new element */
+        if(keypos < MAX_KEY_LENGTH) {
+            keylist[keypos] = hval;
+            ++keypos;
+            mergesort(keylist, keypos, 8, key_compare);
+            return 1;
+        } else {
+            lmice_warning_print("Add key[%s] failed as list is full\n", symbol);
+            return -1;
+        }
+    }
+
+    return 0;
+
+}
+
 forceinline void netmd_pub_data(lmspi_t spi, const char* sym, const void* addr, int len) {
     char symbol[32] = {0};
-    //eal_bf_hash_val key;
-    uint64_t hval;
     int ret;
-    int findit = 0;
 
     /* construct symbol */
     strncat(symbol, md_name, 16);
     strncat(symbol, sym, 16);
 
     /* calc bf key */
-    hval = eal_hash64_fnv1a(symbol, 32);
-    for(ret = 0; ret < keypos; ++ret) {
-        if(keylist[ret] == hval) {
-            findit = 1;
-            break;
-        }
-    }
-    //eal_bf_key(bflter, symbol, 32, key);
-
-    /* check if it's already published */
-    //if(eal_bf_find(bflter, key) == 0) {
-    if(findit) {
+    ret = key_find_and_create(symbol);
+    if(ret == 0) {
         lmspi_send(spi, symbol, addr, len);
-        lmice_info_print("send [%s] size [%d]\n", symbol, len);
-    } else {
-        /* publish the new symbol */
+    } else if(ret == 1) {
         lmspi_publish(spi, symbol);
-        //eal_bf_add(bflter, key);
-        if(keypos >= MAX_KEY_LENGTH) {
-            lmice_error_print("keylist is full\n");
-        } else {
-            keylist[keypos] = hval;
-            ++keypos;
-        }
         lmspi_send(spi, symbol, addr, len);
     }
+
 }

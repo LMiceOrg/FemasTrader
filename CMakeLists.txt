@@ -11,9 +11,10 @@ IF( ${CMAKE_CXX_COMPILER} MATCHES  "[cg][+][+]")
     set(CMAKE_C_FLAGS "-Wall ")
     set(CMAKE_C_FLAGS_DEBUG "-g3")
     add_definitions(-D_BSD_SOURCE)
-    set(CMAKE_C_FLAGS_RELEASE "-O3 -std=c99")
-    set(CMAKE_CXX_FLAGS "-mcpu=native -mtune=native -malign-double")
-    set(CMAKE_C_FLAGS "-mcpu=native -mtune=native -malign-double")
+    add_definitions(-D__USE_POSIX199309)
+    set(CMAKE_C_FLAGS_RELEASE "-O3 -std=gnu99")
+    set(CMAKE_CXX_FLAGS "-march=native -mtune=native -malign-double")
+    set(CMAKE_C_FLAGS "-march=native -mtune=native -malign-double")
 ELSE()
 
 ENDIF()
@@ -206,3 +207,12 @@ add_executable(strategyht ${strategyht_SRC})
 target_link_libraries(strategyht model_static eal_static pthread rt ${femas_libs} ${femasmd_libs}  ${bson_libs} ${fc_libs})
 add_dependencies(strategyht model_static)
 add_dependencies(strategyht eal_static)
+
+#Logger module
+LIST(APPEND logger_src app/logger/logger.c
+)
+add_executable(logger ${logger_src})
+
+target_link_libraries(logger model_static eal_static pthread rt ${bson_libs})
+add_dependencies(logger model_static)
+add_dependencies(logger eal_static)
