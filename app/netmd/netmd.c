@@ -205,7 +205,7 @@ int main(int argc, char* argv[]) {
                         break;
                     cpuset[setcount] = atoi(cmd);
                     ++setcount;
-                    while(*cmd != NULL) {
+                    while(*cmd != 0) {
                         if(*cmd != ',') {
                             ++cmd;
                         } else {
@@ -213,7 +213,7 @@ int main(int argc, char* argv[]) {
                             break;
                         }
                     }
-                } while(*cmd != NULL);
+                } while(*cmd != 0);
 
                 ret = netmd_set_cpuset(cpuset, setcount);
                 lmice_critical_print("set CPUset %d return %d\n", setcount, ret);
@@ -466,7 +466,7 @@ forceinline int key_find_or_create(const char* symbol) {
         if(keypos < MAX_KEY_LENGTH) {
             keylist[keypos] = hval;
             ++keypos;
-            mergesort(keylist, keypos, 8, key_compare);
+            qsort(keylist, keypos, 8, key_compare);
             return 1;
         } else {
             lmice_warning_print("Add key[%s] failed as list is full\n", symbol);
