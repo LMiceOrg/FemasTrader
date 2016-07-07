@@ -446,6 +446,12 @@ forceinline int key_find_or_create(const char* symbol) {
     uint64_t hval;
     uint64_t *key;
     hval = eal_hash64_fnv1a(symbol, 32);
+    if(keypos == 0) {
+        keylist[keypos] = hval;
+        ++keypos;
+        return 1;
+    }
+
     key = (uint64_t*)bsearch(&hval, keylist, keypos, 8, key_compare);
     if(key == NULL) {
         /* create new element */

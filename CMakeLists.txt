@@ -216,3 +216,20 @@ add_executable(logger ${logger_src})
 target_link_libraries(logger model_static eal_static pthread rt ${bson_libs})
 add_dependencies(logger model_static)
 add_dependencies(logger eal_static)
+
+# Generate Id tool
+LIST(APPEND genid_src app/lmiced/genid.c
+)
+add_executable(genid ${genid_src})
+target_link_libraries(genid eal_static pthread rt)
+add_dependencies(genid eal_static)
+
+#Femas2.0 Trader module
+LIST(APPEND fm2trader_src app/fm2trader/fm2spi.cpp
+    app/fm2trader/fm2trader.cpp
+)
+add_executable(fm2trader ${fm2trader_src})
+
+target_link_libraries(fm2trader model_static eal_static pthread rt ${femas_libs})
+add_dependencies(fm2trader model_static)
+add_dependencies(fm2trader eal_static)
