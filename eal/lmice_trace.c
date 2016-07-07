@@ -46,7 +46,7 @@ lmice_trace_name_t lmice_trace_name[] =
     _trace_tm =_trace_stm / 10000000;   \
     ctime_r(&_trace_tm, _trace_current_time); \
     _trace_current_time[24] = ' '; \
-    sprintf(_trace_current_time+25, "%03ld:%03ld:%03ld", _trace_stm / 10000000, \
+    sprintf(_trace_current_time+25, "%03ld:%03ld:%03ld", \
         (_trace_stm % 10000000) / 10000,   \
         (_trace_stm % 10000) / 10,   \
         (_trace_stm % 10) * 100 );  \
