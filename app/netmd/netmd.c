@@ -45,57 +45,6 @@ void print_usage(void);
 /* Daemon */
 int init_daemon(int silent);
 
-int init_daemon(int silent) {
-    if(!silent)
-        return 0;
-
-    if( daemon(0, 1) != 0) {
-        return -2;
-    }
-    return 0;
-}
-
-void print_usage(void) {
-    printf("NetMD -- a md app --\n\n"
-           "\t-h, --help\t\tshow this message\n"
-           "\t-n, --name\t\tset module name\n"
-           "\t-d, --device\t\tset adapter device name\n"
-           "\t-u, --uid\t\tset user id when running\n"
-           "\t-s, --silent\t\trun in silent mode[backend]\n"
-           "\t-f, --filter\t\tfilter to run pcap\n"
-           "\t-p, --position\t\tposition to catch symbol\n"
-           "\t-b, --bytes\t\tpackage size limitation\n"
-           "\t-m, --multicast\t\tmulticast group, bind ip, port\n"
-           "\n"
-           );
-}
-
-void netmd_bf_create(void) {
-    uint64_t n = MAX_KEY_LENGTH;
-    uint32_t m = 0;
-    uint32_t k = 0;
-    double f = 0.0001;
-    /* MAX_KEY_LENGTH items, and with 0.0001 false positive */
-    eal_bf_calculate(n, f, &m, &k, &f);
-
-    bflter = (lm_bloomfilter_t*)malloc(sizeof(lm_bloomfilter_t)+m);
-    memset(bflter, 0, sizeof(lm_bloomfilter_t)+m);
-    bflter->n = n;
-    bflter->f = f;
-    bflter->m = m;
-    bflter->k = k;
-    bflter->addr = (char*)bflter+ sizeof(lm_bloomfilter_t);
-
-    lmice_critical_print("Bloomfilter initialized:\n\tn:%lu\n\tm:%u\n\tk:%u\n\tf:%5.15lf\n",
-                         n,m,k,f);
-
-}
-
-void netmd_bf_delete(void) {
-    free(bflter);
-    bflter = NULL;
-}
-
 static int position = 11;
 static int bytes = sizeof(struct guava_udp_normal)+sizeof(struct guava_udp_head);
 static char md_name[32];
@@ -299,6 +248,59 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+
+
+int init_daemon(int silent) {
+    if(!silent)
+        return 0;
+
+    if( daemon(0, 1) != 0) {
+        return -2;
+    }
+    return 0;
+}
+
+void print_usage(void) {
+    printf("NetMD -- a md app --\n\n"
+           "\t-h, --help\t\tshow this message\n"
+           "\t-n, --name\t\tset module name\n"
+           "\t-d, --device\t\tset adapter device name\n"
+           "\t-u, --uid\t\tset user id when running\n"
+           "\t-s, --silent\t\trun in silent mode[backend]\n"
+           "\t-f, --filter\t\tfilter to run pcap\n"
+           "\t-p, --position\t\tposition to catch symbol\n"
+           "\t-b, --bytes\t\tpackage size limitation\n"
+           "\t-m, --multicast\t\tmulticast group, bind ip, port\n"
+           "\n"
+           );
+}
+
+void netmd_bf_create(void) {
+    uint64_t n = MAX_KEY_LENGTH;
+    uint32_t m = 0;
+    uint32_t k = 0;
+    double f = 0.0001;
+    /* MAX_KEY_LENGTH items, and with 0.0001 false positive */
+    eal_bf_calculate(n, f, &m, &k, &f);
+
+    bflter = (lm_bloomfilter_t*)malloc(sizeof(lm_bloomfilter_t)+m);
+    memset(bflter, 0, sizeof(lm_bloomfilter_t)+m);
+    bflter->n = n;
+    bflter->f = f;
+    bflter->m = m;
+    bflter->k = k;
+    bflter->addr = (char*)bflter+ sizeof(lm_bloomfilter_t);
+
+    lmice_critical_print("Bloomfilter initialized:\n\tn:%lu\n\tm:%u\n\tk:%u\n\tf:%5.15lf\n",
+                         n,m,k,f);
+
+}
+
+void netmd_bf_delete(void) {
+    free(bflter);
+    bflter = NULL;
+}
+
 
 /* netmd worker thread */
 int netmd_pcap_thread(lmspi_t spi, const char *devname, const char* packet_filter) {
