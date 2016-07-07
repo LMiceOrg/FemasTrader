@@ -444,8 +444,9 @@ static int key_compare(const void* key, const void* obj) {
 
 forceinline int key_find_or_create(const char* symbol) {
     uint64_t hval;
-    uint64_t *key;
+    uint64_t *key = NULL;
     hval = eal_hash64_fnv1a(symbol, 32);
+
     if(keypos == 0) {
         keylist[keypos] = hval;
         ++keypos;
