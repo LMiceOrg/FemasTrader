@@ -1036,7 +1036,7 @@ void CLMSpi::get_symbol(const char *symbol, const void **addr, int *count)
     return get_symbol_hval(hval, addr, count);
 }
 
-void get_symbol_hval(uint64_t hval, const void* * addr, int* count) {
+void CLMSpi::get_symbol_hval(uint64_t hval, const void* * addr, int* count) {
     size_t i=0;
     spi_private* p =(spi_private*)m_priv;
 
@@ -1447,12 +1447,12 @@ int lmspi_cpuset(lmspi_t spi, const int* cpuset, int cpucount) {
     return netmd_set_cpuset(cpuset, cpucount);
 }
 
-void lmspi_get_symbol(const char* symbol, const void* * addr, int* count) {
+void lmspi_get_symbol(lmspi_t spi, const char* symbol, const void* * addr, int* count) {
     CLMSpi *pt = (CLMSpi *)spi;
     pt->get_symbol(symbol, addr, count);
 }
 
-void lmspi_get_symbol_by_hval(uint64_t hval, const void* * addr, int* count) {
+void lmspi_get_symbol_by_hval(lmspi_t spi, uint64_t hval, const void* * addr, int* count) {
     CLMSpi *pt = (CLMSpi *)spi;
     pt->get_symbol_hval(hval, addr, count);
 }

@@ -93,12 +93,12 @@ int CFemas2TraderSpi::init_trader() {
     //收到请求后，下交易请求
     MODELNAME(symbol, m_model_name, "-req-orderInster");
     subscribe(symbol);
-    register_cb(order_insert, symbol);
+    register_cb((csymbol_callback)order_insert, symbol);
 
     //收到请求后,全部平仓
     MODELNAME(symbol, m_model_name, "-req-flatten");
     subscribe(symbol);
-    register_cb(flatten_all, symbol);
+    register_cb((csymbol_callback)flatten_all, symbol);
 
 }
 
