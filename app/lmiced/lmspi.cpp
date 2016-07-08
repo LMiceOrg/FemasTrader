@@ -1026,16 +1026,22 @@ void CLMSpi::send(const char *symbol, const void *addr, int len)
 
 void CLMSpi::get_symbol(const char *symbol, const void **addr, int *count)
 {
-    size_t i=0;
-    spi_private* p =(spi_private*)m_priv;
+
     char sym[SYMBOL_LENGTH] = {0};
     uint64_t hval;
 
-    *addr =NULL;
-    *count = 0;
-
     strncpy(sym, symbol, SYMBOL_LENGTH - 1);
     hval = eal_hash64_fnv1a(sym, SYMBOL_LENGTH);
+
+    return get_symbol_hval(hval, addr, count);
+}
+
+void get_symbol_hval(uint64_t hval, const void* * addr, int* count) {
+    size_t i=0;
+    spi_private* p =(spi_private*)m_priv;
+
+    *addr =NULL;
+    *count = 0;
 
     for(i=0; i<p->shmcount; ++i) {
         const spi_shm_t* ps = p->shmlist +i;
@@ -1439,4 +1445,14 @@ void lmspi_signal(lmspi_t spi, sig_t sigfunc) {
 int lmspi_cpuset(lmspi_t spi, const int* cpuset, int cpucount) {
     (void)spi;
     return netmd_set_cpuset(cpuset, cpucount);
+}
+
+void lmspi_get_symbol(const char* symbol, const void* * addr, int* count) {
+    CLMSpi *pt = (CLMSpi *)spi;
+    pt->get_symbol(symbol, addr, count);
+}
+
+void lmspi_get_symbol_by_hval(uint64_t hval, const void* * addr, int* count) {
+    CLMSpi *pt = (CLMSpi *)spi;
+    pt->get_symbol_hval(hval, addr, count);
 }

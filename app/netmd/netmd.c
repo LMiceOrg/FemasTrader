@@ -273,6 +273,14 @@ int main(int argc, char* argv[]) {
     */
 
     /** Exit and maintain resource */
+    lmice_warning_print("Exit %s", md_name);
+    for(i=0; i<keypos; ++i) {
+        const void* addr;
+        int count;
+        uint64_t hval = keylist[i];
+        lmspi_get_symbol_by_hval(hval, &addr, &count);
+        lmice_critical_print("sm%ux message size: %d\n", hval, count);
+    }
     lmspi_quit(spi);
     lmspi_delete(spi);
     //netmd_bf_delete();

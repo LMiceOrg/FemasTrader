@@ -70,6 +70,10 @@ SPICFUN void lmspi_logging(lmspi_t spi, const char* format, ...);
 // 发布数据
 SPICFUN void lmspi_send(lmspi_t spi, const char* symbol, const void* addr, int len);
 
+// 读取数据
+SPICFUN void lmspi_get_symbol(const char* symbol, const void* * addr, int* count);
+SPICFUN void lmspi_get_symbol_by_hval(uint64_t hval, const void* * addr, int* count);
+
 // 信号函数
 SPICFUN void lmspi_signal(lmspi_t spi, sig_t sigfunc);
 
@@ -135,6 +139,8 @@ public:
     void send(const char* symbol, const void* addr, int len);
 
     void get_symbol(const char* symbol, const void* * addr, int* count);
+
+    void get_symbol_hval(uint64_t hval, const void* * addr, int* count);
 
     int register_callback(symbol_callback func, const char* symbol = NULL);
 

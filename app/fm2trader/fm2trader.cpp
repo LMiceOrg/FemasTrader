@@ -141,8 +141,8 @@ int main(int argc, char* argv) {
     //        TERT_RESTART:从本交易日开始重传
     //        TERT_RESUME:从上次收到的续传
     //        TERT_QUICK:只传送登录后私有流的内容
-    pt->SubscribePrivateTopic(USTP_TERT_QUICK);
-    pt->SubscribePublicTopic((USTP_TERT_QUICK);
+    pt->SubscribePrivateTopic(  USTP_TERT_QUICK);
+    pt->SubscribePublicTopic (  USTP_TERT_QUICK);
 
     //设置心跳超时时间
     pt->SetHeartbeatTimeout(5);
