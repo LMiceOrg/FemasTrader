@@ -14,7 +14,7 @@ enum EFEMAS2TRADER {
 class CFemas2TraderSpi: public CLMSpi,
         public CUstpFtdcTraderSpi {
 public:
-    CFemas2Trader   Spi(CUstpFtdcTraderApi *pt, const char* name);
+     CFemas2TraderSpi(CUstpFtdcTraderApi *pt, const char* name);
     ~CFemas2TraderSpi();
 
     ///< Get properties
@@ -28,11 +28,18 @@ public:
     const char* broker_id() const;
     const char* front_address() const;
     const char* investor_id() const;
+    const char* model_name() const;
     void user_id(const char* id);
     void password(const char* id);
     void broker_id(const char* id);
     void front_address(const char* id);
     void investor_id(const char* id);
+    void model_name(const char* id);
+
+    ///<
+    int init_trader();
+    void order_insert(const char* symbol, const void* addr, int size);
+    void flatten_all(const char* symbol, const void* addr, int size);
 
     ///< Callbacks
     void OnFrontConnected();
@@ -78,6 +85,7 @@ private:
     const char* m_broker_id;
     const char* m_front_address;
     const char* m_investor_id;
+    const char* m_model_name;
 };
 
 #endif // FM2SPI_H

@@ -134,6 +134,8 @@ public:
 
     void send(const char* symbol, const void* addr, int len);
 
+    void get_symbol(const char* symbol, const void* * addr, int* count);
+
     int register_callback(symbol_callback func, const char* symbol = NULL);
 
     int register_cb(csymbol_callback func, const char* symbol = NULL) ;

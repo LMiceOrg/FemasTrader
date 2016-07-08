@@ -154,7 +154,7 @@ int lm_clientlist_find_or_create(clientlist_t *cl, struct sockaddr_un *addr, cli
             /* No empty slot, so create a new one */
             if(ncli == NULL) {
                 cur->next = lm_clientlist_create();
-                ncur = cur;
+                ncur = cur->next;
                 ncli = ncur->cli;
                 newslot = 1;
             }

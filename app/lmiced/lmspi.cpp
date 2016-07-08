@@ -1024,6 +1024,31 @@ void CLMSpi::send(const char *symbol, const void *addr, int len)
     }
 }
 
+void CLMSpi::get_symbol(const char *symbol, const void **addr, int *count)
+{
+    size_t i=0;
+    spi_private* p =(spi_private*)m_priv;
+    char sym[SYMBOL_LENGTH] = {0};
+    uint64_t hval;
+
+    *addr =NULL;
+    *count = 0;
+
+    strncpy(sym, symbol, SYMBOL_LENGTH - 1);
+    hval = eal_hash64_fnv1a(sym, SYMBOL_LENGTH);
+
+    for(i=0; i<p->shmcount; ++i) {
+        const spi_shm_t* ps = p->shmlist +i;
+        if(ps->hval == hval && ps->type != 0
+                && ps->shm.addr != NULL) {
+            lmice_data_detail_t* dd = (lmice_data_detail_t*)ps->shm.addr;
+            *addr = dd+1;
+            *count = dd->count;
+            break;
+        }
+    }
+}
+
 //int CLMSpi::cancel(int requestId, int sysId)
 //{
 //    /*FIXME: autoincrease */

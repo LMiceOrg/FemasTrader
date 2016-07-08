@@ -17,6 +17,7 @@ CFemas2TraderSpi::CFemas2TraderSpi(CUstpFtdcTraderApi *pt, const char *name)
     m_broker_id=NULL;
     m_front_address=NULL;
     m_investor_id=NULL;
+    m_model_name = NULL;
 }
 
 CFemas2TraderSpi::~CFemas2TraderSpi() {
@@ -43,12 +44,15 @@ const char* CFemas2TraderSpi::password() const {
 const char* CFemas2TraderSpi::broker_id() const {
     return m_broker_id;
 }
-const char* CFemas2TraderSpi::front_address() {
+const char* CFemas2TraderSpi::front_address() const {
     return m_front_address;
 }
 
 const char* CFemas2TraderSpi::investor_id() const {
     return m_investor_id;
+}
+const char* CFemas2TraderSpi::model_name() const {
+    return m_model_name;
 }
 void CFemas2TraderSpi::user_id(const char* id) {
     m_user_id = id;
@@ -68,6 +72,34 @@ void CFemas2TraderSpi::front_address(const char* id) {
 
 void CFemas2TraderSpi::investor_id(const char* id) {
     m_investor_id = id;
+}
+
+void CFemas2TraderSpi::model_name(const char* id) {
+    m_model_name = id;
+}
+
+#define MODELNAME(s, m, t) do{\
+    memset(symbol, 0, sizeof(symbol));  \
+    strncat(symbol, m, sizeof(symbol)-1);   \
+    strncat(symbol, t, sizeof(symbol) -1);  \
+} while(0)
+
+    //[modelname]-req-flatten
+int CFemas2TraderSpi::init_trader() {
+    int ret;
+    char symbol[32];
+
+    //Subscribe
+    //收到请求后，下交易请求
+    MODELNAME(symbol, m_model_name, "-req-orderInster");
+    subscribe(symbol);
+    register_cb(order_insert, symbol);
+
+    //收到请求后,全部平仓
+    MODELNAME(symbol, m_model_name, "-req-flatten");
+    subscribe(symbol);
+    register_cb(flatten_all, symbol);
+
 }
 
 ///< Utilities
@@ -120,6 +152,9 @@ void CFemas2TraderSpi::OnRspUserLogin(CUstpFtdcRspUserLoginField *pRspUserLogin,
 
 void CFemas2TraderSpi::OnRspOrderInsert(CUstpFtdcInputOrderField *pInputOrder, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
+    int64_t now;
+    get_system_time(&now);
+
     publish("");
 }
 

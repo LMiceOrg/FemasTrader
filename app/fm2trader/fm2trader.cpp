@@ -21,6 +21,7 @@ int main(int argc, char* argv) {
     char user[64] = "";
     char password[64] = "";
     char broker[64] = "";
+    char model_name[32]="fm2trader";
     char *investor = user;
 
     /// 解析命令行
@@ -74,6 +75,16 @@ int main(int argc, char* argv) {
                 lmice_error_print("Command(%s) require broker string\n", cmd);
                 return 1;
             }
+        } else if(strcmp(cmd, "-n") == 0 ||
+                  strcmp(cmd, "--name") == 0) {
+            if(i+1 < argc) {
+                cmd = argv[i+1];
+                memset(model_name, 0, sizeof(model_name));
+                strncpy(model_name, cmd, sizeof(model_name)-1);
+            } else {
+                lmice_error_print("Command(%s) require model name string\n", cmd);
+                return 1;
+            }
         } else if(strcmp(cmd, "-c") == 0 ||
                   strcmp(cmd, "--cpuset") == 0) {
             if(i+1 < argc) {
@@ -119,6 +130,9 @@ int main(int argc, char* argv) {
     spi->broker_id(broker);
     spi->investor_id(investor);
     spi->front_address(front_address);
+    spi->model_name(model_name);
+
+    spi->init_trader();
 
     // 注册一事件处理的实例
     pt->RegisterSpi(spi);
@@ -154,11 +168,12 @@ int main(int argc, char* argv) {
 
 void print_usage() {
     printf("fm2trader:\t\t-- Femas2.0 Trader app --\n"
-           "\t-h, --help\t\tShow this message\n"
-           "\t-f, --front\t\tSet front address\n"
-           "\t-u, --user\t\tSet user id \n"
-           "\t-p, --password\t\tSet password\n"
-           "\t-b, --broker\t\tSet borker id\n"
-           "\t-c, --cpuset\t\tSet cpuset \n"
+           "\t-h, --help\t\tshow this message\n"
+           "\t-n, --name\t\tset module name\n"
+           "\t-f, --front\t\tset front address\n"
+           "\t-u, --user\t\tset user id \n"
+           "\t-p, --password\t\tset password\n"
+           "\t-b, --broker\t\tset borker id\n"
+           "\t-c, --cpuset\t\tset cpuset \n"
            )
 }
