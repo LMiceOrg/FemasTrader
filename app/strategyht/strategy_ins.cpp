@@ -194,7 +194,7 @@ void md_func(const char* symbol, const void* addr, int size)
 	t.tm_sec = atoi(tmp);
 	data_time1 = mktime(&t);
 	micro_time = (int64_t)data_time1 * 1000 * 1000;
-	micro_time += md_data->InstTime.UpdateMillisec;
+	micro_time += md_data->InstTime.UpdateMillisec*1000;
 	msg_data.set_time( micro_time );
 	msg_data.set_bid( md_data->AskBidInst.BidPrice1 );
 	msg_data.set_offer( md_data->AskBidInst.AskPrice1 );
