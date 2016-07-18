@@ -9,7 +9,6 @@ class ChinaL1Msg
 {
 public:
     ChinaL1Msg();
-	
     const std::string& get_inst() const {return m_inst;}
     int64_t get_time() const { return m_time_micro; }
     double get_bid() const { return m_bid;}
@@ -31,6 +30,7 @@ public:
 	void set_notinal( double notional );
 	void set_limit_up( double limit_up );
 	void set_limit_down( double limit_down );
+
 
 private:
     std::string m_inst;

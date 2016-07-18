@@ -141,7 +141,10 @@ void strategy_ins::init()
 	m_strategy_md = new CLMSpi("strategy-md");
 
 	string type = "hc_0";
-	string date = "";
+	time_t current;
+	current = time(NULL);
+	struct tm date = *localtime(&current);
+
 	m_forecaster = ForecasterFactory::createForecaster( type, date );
 }
 
@@ -178,7 +181,7 @@ void md_func(const char* symbol, const void* addr, int size)
 	int64_t micro_time = 0;
 	time_t data_time1, current;
 	current = time(NULL);
-	struct tm t = *gmtime(&current);
+	struct tm t = *localtime(&current);
 
 	char data_time[16];
 	memset(data_time, 0, 16);
@@ -194,7 +197,7 @@ void md_func(const char* symbol, const void* addr, int size)
 	t.tm_sec = atoi(tmp);
 	data_time1 = mktime(&t);
 	micro_time = (int64_t)data_time1 * 1000 * 1000;
-	micro_time += md_data->InstTime.UpdateMillisec;
+	micro_time += md_data->InstTime.UpdateMillisec*1000;
 	msg_data.set_time( micro_time );
 	msg_data.set_bid( md_data->AskBidInst.BidPrice1 );
 	msg_data.set_offer( md_data->AskBidInst.AskPrice1 );
@@ -206,6 +209,7 @@ void md_func(const char* symbol, const void* addr, int size)
 	msg_data.set_limit_down( 0 );
 
 	fc->update(msg_data);
+	if (fc->get_trading_instrument==msg_data.get_inst()) {
 	double signal = fc->get_forecast();
 	double mid = 0.5 * ( md_data->AskBidInst.AskPrice1 + md_data->AskBidInst.BidPrice1 );
 	double forecast = mid * ( 1 + signal );
@@ -245,6 +249,7 @@ void md_func(const char* symbol, const void* addr, int size)
 		//int ordersize = min( md_data->AskBidInst.BidVolume1, g_max_position + position);
 		orderTest->LimitPrice = md_data->AskBidInst.BidPrice1;
 		orderTest->Direction = USTP_FTDC_D_Buy;
+	}
 	}
 
 	//send orderinster
