@@ -13,7 +13,7 @@
 /* print useage of the app */
 static void print_usage();
 
-int main(int argc, char* argv) {
+int main(int argc, char* argv[]) {
     int ret = 0;
     int i;
     char* cmd;
@@ -23,6 +23,7 @@ int main(int argc, char* argv) {
     char broker[64] = "";
     char model_name[32]="fm2trader";
     char *investor = user;
+    char exchange_id[32]= "SHIF";
 
     /// 解析命令行
     for(i=1; i<argc; ++i) {
@@ -75,6 +76,16 @@ int main(int argc, char* argv) {
                 lmice_error_print("Command(%s) require broker string\n", cmd);
                 return 1;
             }
+        } else if(strcmp(cmd, "-e") == 0 ||
+                  strcmp(cmd, "--exchange") == 0) {
+            if(i+1 < argc) {
+                cmd = argv[i+1];
+                memset(exchange_id, 0, sizeof(exchange_id));
+                strncpy(exchange_id, cmd, sizeof(exchange_id)-1);
+            } else {
+                lmice_error_print("Command(%s) require exchange id string\n", cmd);
+                return 1;
+            }
         } else if(strcmp(cmd, "-n") == 0 ||
                   strcmp(cmd, "--name") == 0) {
             if(i+1 < argc) {
@@ -122,7 +133,7 @@ int main(int argc, char* argv) {
     // 产生一个 CUstpFtdcTraderApi 实例
     CUstpFtdcTraderApi *pt = CUstpFtdcTraderApi::CreateFtdcTraderApi("");
     //产生一个事件处理的实例
-    CFemas2TraderSpi * spi = new CFemas2TraderSpi(pt);
+    CFemas2TraderSpi * spi = new CFemas2TraderSpi(pt, model_name);
 
     // 设置交易信息
     spi->user_id(user);
@@ -131,6 +142,7 @@ int main(int argc, char* argv) {
     spi->investor_id(investor);
     spi->front_address(front_address);
     spi->model_name(model_name);
+    spi->exchange_id(exchange_id);
 
     spi->init_trader();
 
@@ -174,6 +186,7 @@ void print_usage() {
            "\t-u, --user\t\tset user id \n"
            "\t-p, --password\t\tset password\n"
            "\t-b, --broker\t\tset borker id\n"
+           "\t-e, --exchange\t\tset exchange id\n"
            "\t-c, --cpuset\t\tset cpuset \n"
-           )
+           );
 }
