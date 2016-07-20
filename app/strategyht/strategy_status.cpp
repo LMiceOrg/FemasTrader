@@ -16,7 +16,6 @@ int strategy_status::set_pos( struct CUstpFtdcRspInvestorPositionField *serv_pos
 	return m_ptr_pos->cur_pos;
 }
 
-
 double strategy_status::set_pl( PTRPL *serv_pl )
 {
 	if( NULL == serv_pl )
