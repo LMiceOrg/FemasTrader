@@ -30,15 +30,63 @@ forceinline void logout(CFemas2TraderSpi* spi) {
     spi->trader()->ReqUserLogout(&req, spi->req_id());
 }
 
-forceinline void orderinsert(CFemas2TraderSpi* spi) {
-    CUstpFtdcInputOrderField req;
-    memset(&req, 0, sizeof req);
+forceinline void orderinsert(CFemas2TraderSpi* spi, CUstpFtdcInputOrderField* preq) {
+    CUstpFtdcInputOrderField& req = *preq;
     strncpy(req.BrokerID, spi->broker_id(), sizeof(req.BrokerID)-1);
     strncpy(req.ExchangeID, spi->exchange_id(), sizeof(req.ExchangeID)-1);
     ///系统报单编号 。置空
     //TUstpFtdcOrderSysIDType	OrderSysID;
     strncpy(req.InvestorID, spi->investor_id(), sizeof(req.InvestorID)-1);
     strncpy(req.UserID, spi->user_id(), sizeof(req.UserID)-1);
+//    ///合约代码
+//	TUstpFtdcInstrumentIDType	InstrumentID;
+//    ///用户本地报单号 。用户自己维护，用来跟踪报单状态 integer,  递增，%012d
+    sprintf(req.UserOrderLocalID, "%012d", spi->req_id());
+//	///报单类型
+//	TUstpFtdcOrderPriceTypeType	OrderPriceType;
+//	///买卖方向
+//	TUstpFtdcDirectionType	Direction;
+//	///开平标志
+//	TUstpFtdcOffsetFlagType	OffsetFlag;
+//	///投机套保标志
+//	TUstpFtdcHedgeFlagType	HedgeFlag;
+//	///价格
+//	TUstpFtdcPriceType	LimitPrice;
+//	///数量
+//	TUstpFtdcVolumeType	Volume;
+//	///有效期类型
+//	TUstpFtdcTimeConditionType	TimeCondition;
+//    ///GTD日期 yyyymmdd
+    time_t t;
+    struct tm date;
+    t = time();
+    localtime_r(&t, &date);
+    sprintf(req.GTDDate, "%04d%02d%02d", date.tm_year+1900, date.tm_mon+1, date.tm_mday);
+//	///成交量类型
+//	TUstpFtdcVolumeConditionType	VolumeCondition;
+//	///最小成交量
+//	TUstpFtdcVolumeType	MinVolume;
+//	///止损价
+//	TUstpFtdcPriceType	StopPrice;
+//	///强平原因
+//	TUstpFtdcForceCloseReasonType	ForceCloseReason;
+//	///自动挂起标志
+//	TUstpFtdcBoolType	IsAutoSuspend;
+//    ///业务单元 。没有用
+//	TUstpFtdcBusinessUnitType	BusinessUnit;
+//    ///用户自定义域 。服务器原样返回
+//	TUstpFtdcCustomType	UserCustom;
+//    ///本地业务标识 。没有用
+//	TUstpFtdcBusinessLocalIDType	BusinessLocalID;
+//    ///业务发生日期 。交易日
+    const char* day = spi->trader()->GetTradingDay();
+    strncpy(req.ActionDay, day, sizeof(req.ActionDay)-1);
+
+    spi->trader()->ReqOrderInsert(&req, spi->req_id());
+}
+
+forceinline void orderaction(CFemas2TraderSpi* spi, CUstpFtdcOrderActionField* preq) {
+
 }
 
 CFemas2TraderSpi::CFemas2TraderSpi(CUstpFtdcTraderApi *pt, const char *name)
@@ -144,7 +192,7 @@ int CFemas2TraderSpi::init_trader() {
     register_cb(cb, symbol);
 
     //收到请求后，下交易请求
-    MODELNAME(symbol, m_model_name, "-req-orderinstert");
+    MODELNAME(symbol, m_model_name, "-orderinstert");
     subscribe(symbol);
     cb = static_cast<csymbol_callback>
             (&CFemas2TraderSpi::order_insert);
@@ -182,6 +230,16 @@ void CFemas2TraderSpi::order_insert(const char *symbol, const void *addr, int si
     (void)symbol;
     (void)addr;
     (void)size;
+
+    if(size != sizeof(CUstpFtdcOrderField)) {
+        lmice_error_print("Order insert incorrect size\n");
+        return;
+    }
+    CUstpFtdcInputOrderField req;
+    memcpy(&req, addr, size);
+
+    orderinsert(this, &req);
+
     lmice_critical_print("order insert\n");
 }
 
