@@ -9,7 +9,7 @@
 
 using std::vector;
 
-#define CUR_INS1  "rb1610"
+#define CUR_INS1  "hc1610"
 #define CUR_INS2  "rb1610"
 
 #define MAX_IP_LEN				32

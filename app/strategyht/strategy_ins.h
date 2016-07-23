@@ -5,46 +5,29 @@
 #include "lmice_eal_thread.h"
 #include "lmice_eal_time.h"
 #include "lmice_trace.h" 
-
-
-#include "forecaster.h"
-
+#include "fforecaster.h"
 #include "struct_ht.h"
-//#include "strategy_status.h"
 #include "lmspi.h"
+#include "strategy_status.h"
 
-#define CONF_FILE_NAME "strategy_ht.ini"
-/*
-#define DEBUG_LOG( format, ... ) do{ \
-	int64_t time = 0; \
-	get_system_time(&time); \
-	char log_format[512]; \
-	memset(log_format, 0 , 512); \
-	strcpy(log_format, "(%s)-(%d)-(%s)-content:" ); \
-	strcat(log_format, format);\
-	strcat(log_format, "\n");
-	printf(log_format, m_ins_conf.model_name, time, __FUNCTION__, ##__VA_ARGS__ ); \
-}while(0) */
+#define MODEL_NAME_SIZE 32
+#define SPI_SYMBOL_SIZE 64
+#define SPI_SYMBOL_PUB_COUNT 16
 
-typedef struct ins_conf{
-	char model_name[32];
-	char instrument[16];
-	double ins_factor;
-	unsigned int maxposition;
-	double maxloss;
-	double maxloss_factor;
-}INS_CONF;
+typedef struct strategy_conf{
+	char m_model_name[MODEL_NAME_SIZE];
+	unsigned int m_max_pos;
+	double m_max_loss;
+	double m_close_value;
+}STRATEGY_CONF,*STRATEGY_CONF_P;
 
 class strategy_ins
 {
-
 public:
-	strategy_ins();
+	strategy_ins( STRATEGY_CONF_P ptr_conf );
 	~strategy_ins();
 
 public:	
-	//加载配置文件
-	void get_conf();
 
 	//初始化实例
 	void init();
@@ -56,25 +39,32 @@ public:
 //	void pause();
 
 	//退出实例，退出前清理所有现场
-	void ins_exit();
+	void exit();
 
 	//退出实例，不清理任何内容
-	void _ins_exit();	
+	void _exit();	
 
 	//设置超时动作
 	int set_timeout();
 
-	Forecaster* get_forecaster(){ return  m_forecaster;}
-	CLMSpi * get_spi(){ return m_strategy_md;}
+	CLMSpi * get_spi(){ return m_strategy;}
+	//const CUR_STATUS_P get_status(){ return m_status; }
 	
+	int get_pause_status() { return m_pause_flag; }
+	int set_pause_status( int pause_status ) { m_pause_flag = pause_status; }
 
-	INS_CONF m_ins_conf;
+	int set_exit() { m_exit_flag = 1; }
+
+public:
+	char m_spi_symbol[SPI_SYMBOL_PUB_COUNT][SPI_SYMBOL_SIZE];
+	CUR_STATUS_P m_status;
+	STRATEGY_CONF_P m_ins_conf;
 
 private:
-//	strategy_status *m_status;
-//	CLMSpi *m_strategy_status;
-	CLMSpi *m_strategy_md;
-	Forecaster *m_forecaster;
+	CLMSpi *m_strategy;
+	int m_exit_flag;
+	int m_pause_flag;
+
 };
 
 #endif
