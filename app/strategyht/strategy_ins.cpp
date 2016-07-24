@@ -185,7 +185,7 @@ void md_func(const char* symbol, const void* addr, int size)
 		int left_pos_size = 0;
 		if( forecast > md_data->AskBidInst.AskPrice1 )
 		{
-			left_pos_size = g_conf->m_max_pos - g_cur_st->m_pos.m_sell_count;
+			left_pos_size = g_conf->m_max_pos - g_cur_st->m_pos.m_buy_count;
 			if( 0 == left_pos_size )
 			{
 				return;
@@ -193,40 +193,42 @@ void md_func(const char* symbol, const void* addr, int size)
 			ask_order_size = left_pos_size < md_data->AskBidInst.AskVolume1 ? left_pos_size : md_data->AskBidInst.AskVolume1;
 			g_order.LimitPrice = md_data->AskBidInst.AskPrice1;
 
-			if( g_cur_st->m_pos.m_buy_count > ask_order_size )
+			if( g_cur_st->m_pos.m_sell_count > ask_order_size )
 			{
 				g_order.Direction = USTP_FTDC_D_Buy;
 				g_order.OffsetFlag = USTP_FTDC_OF_Close;
 			}
 			else
 			{
-				g_order.Direction = USTP_FTDC_D_Sell;
+				g_order.Direction = USTP_FTDC_D_Buy;
 				g_order.OffsetFlag = USTP_FTDC_OF_Open;
 			}
 		}
 		
 		if( forecast < md_data->AskBidInst.BidPrice1 )
 		{
-		  	left_pos_size = g_conf->m_max_pos - g_cur_st->m_pos.m_buy_count;
+		  	left_pos_size = g_conf->m_max_pos - g_cur_st->m_pos.m_sell_count;
 			if( 0 == left_pos_size )
 			{
 				return;
 			}
-			ask_order_size = left_pos_size < md_data->AskBidInst.BidVolume1 ? left_pos_size : md_data->AskBidInst.BidVolume1;
+			ask_order_size = left_pos_size < md_data->AskBidInst.BidVolume1 ?
+					left_pos_size : md_data->AskBidInst.BidVolume1;
 			g_order.LimitPrice = md_data->AskBidInst.BidPrice1;
 			
-			if( g_cur_st->m_pos.m_sell_count > ask_order_size )
+			if( g_cur_st->m_pos.m_buy_count > ask_order_size )
 			{
 				g_order.Direction = USTP_FTDC_D_Sell;
 				g_order.OffsetFlag = USTP_FTDC_OF_Close;
 			}
 			else
 			{
-				g_order.Direction = USTP_FTDC_D_Buy;
+				g_order.Direction = USTP_FTDC_D_Sell;
 				g_order.OffsetFlag = USTP_FTDC_OF_Open;
 			}
 		}
 
+		g_order.Volume = ask_order_size;
 		get_system_time(&systime_md);
 		memset(str_log, 0, sizeof(str_log));
 		sprintf( str_log, "[%ld]send order insert,content: %s\n", systime_md, md_msg.m_inst );
@@ -338,7 +340,7 @@ void strategy_ins::init()
 void strategy_ins::run()
 {
 
-	//设置超时时间，时间到达后发出清仓指令
+	//锟斤拷锟矫筹拷时时锟戒，时锟戒到锟斤拷蠓⒊锟斤拷锟斤拷指锟斤拷
 	if( set_timeout() < 0 )
 	{
 		lmice_error_print("set time out signal error\n");
