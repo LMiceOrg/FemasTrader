@@ -33,7 +33,7 @@ void timeout_handler(int sig)
 	}
 }
 
-void signal_handler(int sig) {
+void term_handler(int sig) {
     if(sig == SIGTERM || sig == SIGINT)
     {
     	if( g_ins != NULL)
@@ -142,17 +142,11 @@ int main(int argc, char **argv)
     } /* end-for: argc*/
 
 	signal(SIGALRM, timeout_handler);
-	signal(SIGTERM, signal_handler);
-	signal(SIGINT, signal_handler);
-
-	while(1)
-	{
-		sleep(1);
-	}
 
 	lmice_info_print("strategy for ht is running...\n");
 	strategy_ins instance( &st_conf );
 	g_ins = &instance;
+	instance.get_spi()->register_signal(term_handler);
 	instance.run();
 	
 }

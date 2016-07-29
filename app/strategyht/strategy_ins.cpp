@@ -10,11 +10,13 @@
 #include <signal.h>
 #include <time.h>
 #include <float.h>
+#include <map>
+#include <vector>
 
 #include <unistd.h>
 #include <sys/types.h>
 
-#define FC_DEBUG 1
+//#define FC_DEBUG 1
 
 enum spi_symbol{
 	//publish symbol
@@ -23,6 +25,7 @@ enum spi_symbol{
 	symbol_flatten,
 	symbol_hard_flatten,
 	symbol_log,
+	symbol_trade_ins,
 	//subscribe symbol
 	symbol_position,
 	symbol_account
@@ -39,13 +42,20 @@ CUstpFtdcInputOrderField g_order;
 
 #define MAX_LOG_SIZE 1024
 
+///freq check, 1min 120 round
+///top check, 
+
+
 //call back function 
 void md_func(const char* symbol, const void* addr, int size)
 {
+	int send_flag = 0;
 	char str_log[MAX_LOG_SIZE];
 	int64_t systime_md = 0;
 	get_system_time(&systime_md);
 
+	g_ins->m_time_log[g_ins->m_time_log_pos][st_time_get_md] = systime_md/10;
+	
 	if( 1 == g_ins->get_pause_status() )
 	{
 		return;
@@ -63,10 +73,18 @@ void md_func(const char* symbol, const void* addr, int size)
 		return;
 	}
 
+/*
 	memset(str_log, 0, sizeof(str_log));
 	sprintf( str_log, "[%ld]get md data,content: %s\n", systime_md, md_data->InstTime.InstrumentID );
 	g_spi->send( g_ins->m_spi_symbol[symbol_log], str_log, strlen(str_log) );
-
+*/
+/*
+	printf("\n=========get md dat:=========\n");
+	printf("time:%ld\n", systime_md/10);
+	printf("ins:%s\n", md_data->InstTime.InstrumentID);
+	printf("pri:%lf\n\n", md_data->PriVol.LastPrice);
+*/
+#ifdef USE_C_LIB
 	//translate format to FC_MD_MSG
 	FC_MD_MSG md_msg;
 	memset( &md_msg, 0, sizeof(FC_MD_MSG) );
@@ -102,14 +120,13 @@ void md_func(const char* symbol, const void* addr, int size)
 	md_msg.m_offer_quantity = md_data->AskBidInst.AskVolume1;
 	md_msg.m_volume = md_data->PriVol.Volume;
 	md_msg.m_notional = md_data->PriVol.Turnover;
-	md_msg.m_limit_up = 0;
-	md_msg.m_limit_down = 0;
+	md_msg.m_limit_up = g_cur_st->m_md.m_up_price;
+	md_msg.m_limit_down = g_cur_st->m_md.m_down_price;
 
 	get_system_time(&systime_md);
 	memset(str_log, 0, sizeof(str_log));
 	sprintf( str_log, "[%ld]update to forecaster,content: %s\n", systime_md, md_msg.m_inst );
 	g_spi->send( g_ins->m_spi_symbol[symbol_log], str_log, strlen(str_log) );
-	
 	fc_update_msg( &md_msg );
 	double signal = fc_get_forecast();
 
@@ -121,14 +138,66 @@ void md_func(const char* symbol, const void* addr, int size)
 	memset( arr_name, 0, sizeof(arr_name) );
 	fc_get_all_signal( arr_name, arr_signal, &sig_size);
 #endif
+	
+#endif
+
+#ifdef USE_CPLUS_LIB
+	Forecaster *fc = g_ins->get_forecaster();
+	ChinaL1Msg msg_data;
+	msg_data.set_inst( md_data->InstTime.InstrumentID );
+
+	int64_t micro_time = 0;
+	time_t data_time1, current;
+	current = time(NULL);
+	struct tm t = *localtime(&current);
+
+	char data_time[16];
+	memset(data_time, 0, 16);
+	strcpy(data_time, md_data->InstTime.UpdateTime);
+
+	char tmp[8];
+	memset(tmp, 0, 8);
+	memcpy( tmp, data_time, 2 );
+	t.tm_hour = atoi(tmp);
+	memcpy( tmp, data_time+3, 2 );
+	t.tm_min = atoi(tmp);
+	memcpy( tmp, data_time+6, 2 );
+	t.tm_sec = atoi(tmp);
+	data_time1 = mktime(&t);
+	micro_time = (int64_t)data_time1 * 1000 * 1000;
+	micro_time += md_data->InstTime.UpdateMillisec * 1000;
+	msg_data.set_time( micro_time );
+	msg_data.set_bid( md_data->AskBidInst.BidPrice1 );
+	msg_data.set_offer( md_data->AskBidInst.AskPrice1 );
+	msg_data.set_bid_quantity( md_data->AskBidInst.BidVolume1 );
+	msg_data.set_offer_quantity( md_data->AskBidInst.AskVolume1 );
+	msg_data.set_volume( md_data->PriVol.Volume );
+	msg_data.set_notinal( md_data->PriVol.Turnover );
+	msg_data.set_limit_up( 0 );
+	msg_data.set_limit_down( 0 );
+
+	fc->update(msg_data);
+	double signal = fc->get_forecast();
+
+	get_system_time(&systime_md);
+	g_ins->m_time_log[g_ins->m_time_log_pos][st_time_get_forecast] = systime_md/10;
+	
+#ifdef FC_DEBUG
+	double arr_signal[12];
+	memset( arr_signal, 0, 12*sizeof(double) );
+	fc->get_all_signal(arr_signal);
+#endif
+
+#endif
 
 	if( 0 == strcmp( md_data->InstTime.InstrumentID, g_cur_st->m_ins_name ) )
 	{
-
 		if( md_data->PriVol.LastPrice > 0 && md_data->PriVol.LastPrice != g_cur_st->m_md.m_last_price)
 		{
 			g_cur_st->m_md.m_last_price =  md_data->PriVol.LastPrice;
-			int pl = ( g_cur_st->m_pos.m_buy_count + g_cur_st->m_pos.m_sell_count) * g_cur_st->m_md.m_last_price + g_cur_st->m_acc.m_valid_money - g_conf->m_close_value;
+			//fix me -  modify : buy sell count, value calculate methods, fee, multiplier 
+			int left_pos = g_cur_st->m_pos.m_buy_pos - g_cur_st->m_pos.m_sell_pos;
+			int pl = g_cur_st->m_acc.m_left_cash + left_pos * g_cur_st->m_md.m_multiple * g_cur_st->m_md.m_last_price;
 			if( -pl >= g_conf->m_max_loss )
 			{
 				g_ins->exit();
@@ -136,9 +205,27 @@ void md_func(const char* symbol, const void* addr, int size)
 			}
 		}
 
+		if( g_cur_st->m_md.m_last_price >= g_cur_st->m_md.m_up_price || g_cur_st->m_md.m_last_price <= g_cur_st->m_md.m_down_price )
+		{
+			printf("touch the limit, return\n");
+			printf("last price:%lf\n", g_cur_st->m_md.m_last_price);
+			printf("up price:%lf\n", g_cur_st->m_md.m_up_price);
+			printf("down price:%lf\n", g_cur_st->m_md.m_down_price);
+			return;
+		}
+
 		double mid = 0.5 * ( md_data->AskBidInst.AskPrice1 + md_data->AskBidInst.BidPrice1 );
 		double forecast = mid * ( 1 + signal );
-
+/*
+		int64_t systime_fc = 0;
+		get_system_time(&systime_fc);
+		printf("\n=========get forecast:=========\n");
+		printf("time:%ld\n", systime_fc/10);
+		printf("ins:%s\n", md_data->InstTime.InstrumentID);
+		printf("for:%lf\n", forecast);
+		printf("bid:%lf\n", md_data->AskBidInst.BidPrice1);
+		printf("ask:%lf\n\n", md_data->AskBidInst.AskPrice1);
+*/
 #ifdef FC_DEBUG
 		int64_t systime_fc = 0;
 		get_system_time(&systime_fc);
@@ -181,70 +268,90 @@ void md_func(const char* symbol, const void* addr, int size)
 #endif
 
 	    //send order insert command
-		int ask_order_size = 0;
+		int order_size = 0;
 		int left_pos_size = 0;
 		if( forecast > md_data->AskBidInst.AskPrice1 )
 		{
-			left_pos_size = g_conf->m_max_pos - g_cur_st->m_pos.m_buy_count;
-			if( 0 == left_pos_size )
+			left_pos_size = g_conf->m_max_pos - ( g_cur_st->m_pos.m_buy_pos - g_cur_st->m_pos.m_sell_pos );
+			//printf("=== left_pos_size: %d\n ===\n", left_pos_size);
+			if( left_pos_size <= 0 )
 			{
 				return;
 			}
-			ask_order_size = left_pos_size < md_data->AskBidInst.AskVolume1 ? left_pos_size : md_data->AskBidInst.AskVolume1;
+			order_size = left_pos_size < md_data->AskBidInst.AskVolume1 ? left_pos_size : md_data->AskBidInst.AskVolume1;
 			g_order.LimitPrice = md_data->AskBidInst.AskPrice1;
-
-			if( g_cur_st->m_pos.m_sell_count > ask_order_size )
+			//printf("=== order_size: %d\n ===\n", order_size);
+			if( g_cur_st->m_pos.m_sell_pos >= order_size )
 			{
 				g_order.Direction = USTP_FTDC_D_Buy;
-				g_order.OffsetFlag = USTP_FTDC_OF_Close;
+				g_order.OffsetFlag = USTP_FTDC_OF_CloseToday;
 			}
 			else
 			{
 				g_order.Direction = USTP_FTDC_D_Buy;
 				g_order.OffsetFlag = USTP_FTDC_OF_Open;
 			}
+			send_flag = 1;
 		}
 		
 		if( forecast < md_data->AskBidInst.BidPrice1 )
 		{
-		  	left_pos_size = g_conf->m_max_pos - g_cur_st->m_pos.m_sell_count;
-			if( 0 == left_pos_size )
+		  	left_pos_size = g_conf->m_max_pos - ( g_cur_st->m_pos.m_sell_pos - g_cur_st->m_pos.m_buy_pos );
+			if( left_pos_size <= 0 )
 			{
 				return;
 			}
-			ask_order_size = left_pos_size < md_data->AskBidInst.BidVolume1 ?
+			order_size = left_pos_size < md_data->AskBidInst.BidVolume1 ?
 					left_pos_size : md_data->AskBidInst.BidVolume1;
 			g_order.LimitPrice = md_data->AskBidInst.BidPrice1;
 			
-			if( g_cur_st->m_pos.m_buy_count > ask_order_size )
+			if( g_cur_st->m_pos.m_buy_pos >= order_size )
 			{
 				g_order.Direction = USTP_FTDC_D_Sell;
-				g_order.OffsetFlag = USTP_FTDC_OF_Close;
+				g_order.OffsetFlag = USTP_FTDC_OF_CloseToday;
 			}
 			else
 			{
 				g_order.Direction = USTP_FTDC_D_Sell;
 				g_order.OffsetFlag = USTP_FTDC_OF_Open;
 			}
+			send_flag = 1;
+		}
+		if( send_flag )
+		{
+			g_order.Volume = order_size;
+/*
+			printf("\n=========send order insert:=========\n");
+			printf("ins:%s\n", g_order.InstrumentID);
+			printf("price:%lf\n", g_order.LimitPrice);
+			printf("volume:%d\n", g_order.Volume);
+			printf("direction:%c\n", g_order.Direction);
+			printf("OffsetFlag:%c\n", g_order.OffsetFlag);
+*/
+			//send order insert
+			g_spi->send( g_ins->m_spi_symbol[symbol_order_insert], &g_order, sizeof(CUstpFtdcInputOrderField));
+	/*		
+			get_system_time(&systime_md);
+			memset(str_log, 0, sizeof(str_log));
+			sprintf( str_log, "[%ld]send order insert,content: %s\n", systime_md, g_order.InstrumentID );
+	*/
+			
+			g_spi->send( g_ins->m_spi_symbol[symbol_log], str_log, strlen(str_log) );
+			get_system_time(&systime_md);
+			g_ins->m_time_log[g_ins->m_time_log_pos++][st_time_send_order] = systime_md/10;
+		}
+		else
+		{
+			g_ins->m_time_log[g_ins->m_time_log_pos++][st_time_send_order] = 0;
 		}
 
-		g_order.Volume = ask_order_size;
-		get_system_time(&systime_md);
-		memset(str_log, 0, sizeof(str_log));
-		sprintf( str_log, "[%ld]send order insert,content: %s\n", systime_md, md_msg.m_inst );
-		g_spi->send( g_ins->m_spi_symbol[symbol_log], str_log, strlen(str_log) );
-
-		//send order insert
-		g_spi->send( g_ins->m_spi_symbol[symbol_order_insert], &g_order, sizeof(CUstpFtdcInputOrderField));
-
-
-			
 	}
 }
 
 
 void status_func(const char* symbol, const void* addr, int size)
 {
+	lmice_info_print("get status update\n");
 	char str_log[MAX_LOG_SIZE];
 	int64_t systime_md = 0;
 
@@ -253,27 +360,45 @@ void status_func(const char* symbol, const void* addr, int size)
 		return;
 	}
 
-	if( 0 == strcmp( symbol, g_ins->m_spi_symbol[symbol_position] ) )
+	if( size < sizeof(CUR_STATUS) )
 	{
-		get_system_time(&systime_md);
-		memset(str_log, 0, sizeof(str_log));
-		sprintf( str_log, "[%ld]get position msg,content:\n", systime_md );
-		g_spi->send( g_ins->m_spi_symbol[symbol_log], str_log, strlen(str_log) );
-		
-		//to be add
+		return;
 	}
-	else if( 0 == strcmp( symbol, g_ins->m_spi_symbol[symbol_account] ) )
+
+	double last_price = g_cur_st->m_md.m_last_price;
+	memcpy( g_cur_st, addr, sizeof(CUR_STATUS) );
+	g_cur_st->m_md.m_last_price = last_price;
+
+	printf("===current status:===\n");
+	printf(" up price: %lf\n", g_cur_st->m_md.m_up_price);
+	printf(" down price: %lf\n", g_cur_st->m_md.m_down_price);
+	printf(" last price: %lf\n", g_cur_st->m_md.m_last_price);
+	printf(" m_buy_pos:%d\n", g_cur_st->m_pos.m_buy_pos);
+	printf(" m_sell_pos:%d\n", g_cur_st->m_pos.m_sell_pos);
+	printf(" m_left_cash:%lf\n", g_cur_st->m_acc.m_left_cash);
+	printf(" m_fee:%lf\n", g_cur_st->m_md.fee_rate);
+
+	if( g_cur_st->m_md.m_last_price == 0 )
+	{
+		return;
+	}
+
+	//if( 0 == strcmp( symbol, g_ins->m_spi_symbol[symbol_account] ) )
 	{
 		get_system_time(&systime_md);
 		memset(str_log, 0, sizeof(str_log));
-		sprintf( str_log, "[%ld]get account msg,content:\n", systime_md );
+		sprintf( str_log, "[%ld]get trade msg,content:\n", systime_md );
 		g_spi->send( g_ins->m_spi_symbol[symbol_log], str_log, strlen(str_log) );
-		//to be add
 	}
 
 	//calculate pl
 	{
-		int pl = ( g_cur_st->m_pos.m_buy_count + g_cur_st->m_pos.m_sell_count) * g_cur_st->m_md.m_last_price + g_cur_st->m_acc.m_valid_money - g_conf->m_close_value;
+		int left_pos = g_cur_st->m_pos.m_buy_pos - g_cur_st->m_pos.m_sell_pos;
+		double fee =  fabs(left_pos) * g_cur_st->m_md.m_multiple * g_cur_st->m_md.m_last_price * g_cur_st->m_md.fee_rate;
+		double pl = g_cur_st->m_acc.m_left_cash + left_pos * g_cur_st->m_md.m_multiple * g_cur_st->m_md.m_last_price - fee;
+
+		printf(" current_pl:%lf\n", pl);
+		
 		if( -pl >= g_conf->m_max_loss )
 		{
 			g_ins->exit();
@@ -299,6 +424,9 @@ strategy_ins::strategy_ins( STRATEGY_CONF_P ptr_conf ):m_exit_flag(0),m_pause_fl
 	g_spi = m_strategy;
 	g_cur_st = m_status;
 	g_conf = m_ins_conf;
+
+	memset( m_time_log, 0, ST_TIME_LOG_MAX*3*sizeof(int64_t) );
+	m_time_log_pos = 0;
 	
 	init();
 }
@@ -309,23 +437,29 @@ strategy_ins::~strategy_ins()
 	delete m_strategy;
 }
 
-
 void strategy_ins::init()
 {	
 	string type = "hc_0";
 	time_t current;
 	current = time(NULL);
 	struct tm date = *localtime(&current);
+	
+#ifdef USE_C_LIB
 	if ( fc_init( "hc_0", date ) < 0 )
 	{
 		lmice_error_print(" forecaster lib init error\n ");
 	}
+#endif
 
-	sprintf( m_spi_symbol[symbol_order_insert], "[%s]%s", m_ins_conf->m_model_name, "OrderInsert" );
-	sprintf( m_spi_symbol[symbol_flatten], "[%s]%s", m_ins_conf->m_model_name, "Flatten" );
-	sprintf( m_spi_symbol[symbol_log], "[%s]%s", m_ins_conf->m_model_name, "Logging");
-	sprintf( m_spi_symbol[symbol_position], "[%s]%s", m_ins_conf->m_model_name, "Position" );
-	sprintf( m_spi_symbol[symbol_account], "[%s]%s", m_ins_conf->m_model_name, "Account" );
+#ifdef USE_CPLUS_LIB
+	m_forecaster = ForecasterFactory::createForecaster( type, date );
+#endif
+	sprintf( m_spi_symbol[symbol_order_insert], "%s%s", m_ins_conf->m_model_name, "OrderInsert" );
+	sprintf( m_spi_symbol[symbol_flatten], "%s%s", m_ins_conf->m_model_name, "Flatten" );
+	sprintf( m_spi_symbol[symbol_log], "%s%s", m_ins_conf->m_model_name, "Logging");
+	sprintf( m_spi_symbol[symbol_position], "%s%s", m_ins_conf->m_model_name, "Position" );
+	sprintf( m_spi_symbol[symbol_account], "%s%s", m_ins_conf->m_model_name, "Account" );
+	sprintf( m_spi_symbol[symbol_trade_ins], "%s%s", m_ins_conf->m_model_name, "TradeInstrument" );
 
 	memset( &g_order, 0, sizeof(CUstpFtdcInputOrderField));
 	g_order.OrderPriceType = USTP_FTDC_OPT_LimitPrice;
@@ -340,7 +474,7 @@ void strategy_ins::init()
 void strategy_ins::run()
 {
 
-	//锟斤拷锟矫筹拷时时锟戒，时锟戒到锟斤拷蠓⒊锟斤拷锟斤拷指锟斤拷
+	//设置超时时间，时间到达后发出清仓指令
 	if( set_timeout() < 0 )
 	{
 		lmice_error_print("set time out signal error\n");
@@ -357,16 +491,23 @@ void strategy_ins::run()
 	lmice_info_print( "publish symbol: %s\n", m_spi_symbol[symbol_log] );
 	m_strategy->publish( m_spi_symbol[symbol_log] );
 
+	lmice_info_print( "publish symbol: %s\n", m_spi_symbol[symbol_trade_ins] );
+	m_strategy->publish( m_spi_symbol[symbol_trade_ins] );
+
+#ifdef USE_C_LIB
 	int size = 0;
 	char tmp_list[8][16];
 	memset( tmp_list, 0, sizeof(tmp_list) );
 	fc_get_trade_list( tmp_list ,&size );
 	strcpy( m_status->m_ins_name, tmp_list[0] );
+	strcpy( g_order.InstrumentID, tmp_list[0] );
+	printf("========== send trade instrument ==========\n");
+	m_strategy->send( m_spi_symbol[symbol_trade_ins], m_status->m_ins_name, strlen(m_status->m_ins_name));
 
 	char symbol[SPI_SYMBOL_SIZE];
 	memset(symbol, 0, SPI_SYMBOL_SIZE);
-	sprintf( symbol, "[%s]%s", m_ins_conf->m_model_name, m_status->m_ins_name );
-	lmice_info_print( "subscribe symbol: %s\n", m_status->m_ins_name );
+	sprintf( symbol, "%s%s", m_ins_conf->m_model_name, m_status->m_ins_name );
+	lmice_info_print( "subscribe symbol: %s\n", symbol );
 	m_strategy->subscribe( symbol );
 	m_strategy->register_callback(md_func, symbol );
 
@@ -377,15 +518,45 @@ void strategy_ins::run()
 	for( i=0; i<size; i++ )
 	{
 		memset(symbol, 0, SPI_SYMBOL_SIZE);
-		sprintf( symbol, "[%s]%s", m_ins_conf->m_model_name, tmp_list[i] );
+		sprintf( symbol, "%s%s", m_ins_conf->m_model_name, tmp_list[i] );
+		lmice_info_print( "subscribe symbol: %s\n", symbol );
+		m_strategy->subscribe( symbol );
+		m_strategy->register_callback(md_func, symbol );
+	}
+#endif
+
+#ifdef USE_CPLUS_LIB
+
+	Forecaster *fc = g_ins->get_forecaster();
+	string str_trade_ins = fc->get_trading_instrument();
+	strcpy( m_status->m_ins_name, str_trade_ins.c_str() );
+	strcpy( g_order.InstrumentID, str_trade_ins.c_str() );
+	printf("========== send trade instrument ==========\n");
+	m_strategy->send( m_spi_symbol[symbol_trade_ins], m_status->m_ins_name, strlen(m_status->m_ins_name));
+
+	char symbol[SPI_SYMBOL_SIZE];
+	memset(symbol, 0, SPI_SYMBOL_SIZE);
+	sprintf( symbol, "%s%s", m_ins_conf->m_model_name, m_status->m_ins_name );
+	lmice_info_print( "subscribe symbol: %s\n", symbol );
+	m_strategy->subscribe( symbol );
+	m_strategy->register_callback(md_func, symbol );
+
+	vector<string> array_ref_ins = fc->get_subscriptions();
+	vector<string>::iterator iter;
+	for( iter=array_ref_ins.begin();iter!=array_ref_ins.end();iter++ )
+	{
+		memset(symbol, 0, SPI_SYMBOL_SIZE);
+		sprintf( symbol, "%s%s", m_ins_conf->m_model_name, (*iter).c_str() );
 		lmice_info_print( "subscribe symbol: %s\n", symbol );
 		m_strategy->subscribe( symbol );
 		m_strategy->register_callback(md_func, symbol );
 	}
 
-	lmice_info_print( "subscribe symbol: %s\n", m_spi_symbol[symbol_position] );
+#endif
+
+/*	lmice_info_print( "subscribe symbol: %s\n", m_spi_symbol[symbol_position] );
 	m_strategy->subscribe( m_spi_symbol[symbol_position] );
-	m_strategy->register_callback( status_func, m_spi_symbol[symbol_position] );
+	m_strategy->register_callback( status_func, m_spi_symbol[symbol_position] );*/
 
 	lmice_info_print( "subscribe symbol: %s\n", m_spi_symbol[symbol_account] );
 	m_strategy->subscribe( m_spi_symbol[symbol_account] );
@@ -403,9 +574,10 @@ void strategy_ins::run()
 
 int strategy_ins::set_timeout()
 {
-	time_t endline1, endline2, current,span;
+	time_t endline1, endline2, endline3, current, span;
 	current = time(NULL);
 	struct tm t = *localtime(&current);
+	current = mktime(&t);
 	t.tm_hour = 11;
 	t.tm_min = 25;
 	t.tm_sec = 0;
@@ -416,6 +588,18 @@ int strategy_ins::set_timeout()
 	t.tm_sec = 0;
 	endline2 = mktime(&t);
 
+	t.tm_hour = 22;
+	t.tm_min = 55;
+	t.tm_sec = 0;
+	endline3 = mktime(&t);
+
+	lmice_info_print( "set time out\n" );
+	printf("current:%ld\n", current);
+	printf("endline1:%ld\n", endline1);
+	printf("endline2:%ld\n", endline2);
+	printf("endline3:%ld\n", endline3);
+
+
 	if( current < endline1 )
 	{
 		span = endline1 - current;
@@ -424,10 +608,16 @@ int strategy_ins::set_timeout()
 	{
 		span = endline2 - current;
 	}
+	else if( current < endline3 )
+	{
+		span = endline3 - current;
+	}
 	else
 	{
 		return -1;
 	}
+
+	printf("span:%ld\n", span);
 
 	alarm(span);
 
@@ -440,12 +630,24 @@ void strategy_ins::exit()
 	if( m_strategy != NULL )
 	{
 		double price = 0;
+		//printf("=== flatten all ===\n");
 		m_strategy->send( m_spi_symbol[symbol_flatten], &price, sizeof(price));
 	}
 	m_pause_flag = 1;
 	m_strategy->quit();
 	lmice_info_print("exit strategy instance\n");
+	
 	sleep(1);
+	int i = 0;
+	printf("==========%ld=========\n", m_time_log_pos);
+	for(i=0; i<m_time_log_pos; i++)
+	{
+		if( m_time_log[i][st_time_send_order] )
+		{
+			printf("\t%ld\t\t%ld\t\t%ld\n", m_time_log[i][st_time_get_md], m_time_log[i][st_time_get_forecast], m_time_log[i][st_time_send_order]);
+		}
+	}
+	
 	_exit();
 }
 

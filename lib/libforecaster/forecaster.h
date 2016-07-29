@@ -5,6 +5,7 @@
 #include <map>
 #include <vector>
 #include <string>
+#include <time.h>
 
 
 typedef std::vector<ChinaL1DiscreteFeature *> FeatureVector;
@@ -20,7 +21,12 @@ public:
 
     double get_forecast();
 
+    void get_all_signal( double array[] );
+
     void reset();
+
+    std::string get_trading_instrument() const{ return m_trading_instrument;}
+    std::vector<std::string> get_subscriptions() const;
 
 protected:
     void addSelfFeature(std::string instr, ChinaL1DiscreteFeature* feature);
@@ -28,6 +34,7 @@ protected:
     FeatureMap m_feaMap;
     std::string m_trading_instrument;
 
+    std::vector<std::string> m_subscriptions;
 
 };
 
@@ -35,7 +42,7 @@ protected:
 class ForecasterFactory
 {
 public:
-    static Forecaster * createForecaster(std::string& fcName, std::string& date);
+    static Forecaster * createForecaster(std::string& fcName, struct tm& date);
 
 };
 
@@ -44,7 +51,7 @@ class HC_0_Forecaster:public Forecaster
 {
 
 public:
-    HC_0_Forecaster(std::string& date);
+    HC_0_Forecaster(struct tm& date);
 };
 
 #endif // FORECASTER_H_INCLUDED

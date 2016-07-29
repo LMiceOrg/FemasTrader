@@ -3,6 +3,7 @@
 #include "lmspi.h"
 #include "USTPFtdcTraderApi.h"
 #include "USTPFtdcUserApiStruct.h"
+#include "strategy_status.h"
 
 enum EFEMAS2TRADER {
     FMTRADER_UNKNOWN=0,
@@ -10,6 +11,22 @@ enum EFEMAS2TRADER {
     FMTRADER_LOGIN,
     FMTRADER_DISCONNECTED
 };
+
+#define FM_TIME_LOG_MAX 65535 
+enum FM_TIME_TYPE{
+	fm_time_get_req = 0,
+	fm_time_send_order,
+	fm_time_get_rtn
+};
+
+typedef struct fm2_trader_postion{
+	int m_buy_pos;
+	int m_sell_pos;
+}FM2_POS,*FM2_POS_P;
+
+typedef struct fm2_trader_account{
+	double m_curr_available;
+}FM2_ACC,*FM2_ACC_P;
 
 class CFemas2TraderSpi: public CLMSpi,
         public CUstpFtdcTraderSpi {
@@ -22,7 +39,7 @@ public:
     int req_id();
     //trader
     CUstpFtdcTraderApi* trader() const;
-
+	
     const char* user_id() const;
     const char* password() const;
     const char* broker_id() const;
@@ -37,6 +54,8 @@ public:
     void investor_id(const char* id);
     void model_name(const char* id);
     void exchange_id(const char* id);
+
+	const CUR_STATUS_P get_status();
 
     ///<
     int init_trader();
@@ -61,6 +80,11 @@ public:
     void OnErrRtnOrderInsert(CUstpFtdcInputOrderField *pInputOrder, CUstpFtdcRspInfoField *pRspInfo);
     void OnErrRtnOrderAction(CUstpFtdcOrderActionField *pOrderAction, CUstpFtdcRspInfoField *pRspInfo);
 
+	void OnRspQryInvestorAccount(CUstpFtdcRspInvestorAccountField *pRspInvestorAccount, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast);
+	void OnRspQryInvestorPosition(CUstpFtdcRspInvestorPositionField *pRspInvestorPosition, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast);
+	void OnRspError(CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast);
+
+
     //QuerySPI
     //void OnRspQryOrder(CUstpFtdcOrderField *pOrder, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast);
     //void OnRspQryTrade(CUstpFtdcTradeField *pTrade, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast);
@@ -80,10 +104,14 @@ public:
     ///投资者保证金率查询应答
     //void OnRspQryInvestorMargin(CUstpFtdcInvestorMarginField *pInvestorMargin, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast);
 
+	int64_t m_time_log[FM_TIME_LOG_MAX][3];
+	int m_time_log_pos;
+
 private:
     CUstpFtdcTraderApi *m_trader;
     int m_curid;
     EFEMAS2TRADER m_state;
+
     const char* m_user_id;
     const char* m_password;
     const char* m_broker_id;
@@ -91,6 +119,11 @@ private:
     const char* m_investor_id;
     const char* m_model_name;
     const char* m_exchange_id;
+
+	//current status
+	//double m_org_available;
+	CUR_STATUS m_trade_status;
+
 };
 
 #endif // FM2SPI_H

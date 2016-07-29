@@ -25,6 +25,7 @@ INCLUDE_DIRECTORIES(.
     lib/FemasAPIv2/linux64/include
     lib/libbson/include
     lib/libforecaster
+    app/strategyht/
     app/lmiced/)
 
 FIND_LIBRARY(femas_libs NAMES USTPtraderapi
@@ -187,16 +188,16 @@ add_dependencies(netmd eal_static)
 
 
 #Add HT guava md model
-LIST(APPEND guavaht_SRC app/mdht/guava_demo.cpp
-    app/mdht/guava_quote.cpp
-    app/mdht/guavaht.cpp
-    app/mdht/profile.cpp
-    app/mdht/socket_multicast.cpp )
+#LIST(APPEND guavaht_SRC app/mdht/guava_demo.cpp
+#    app/mdht/guava_quote.cpp
+#    app/mdht/guavaht.cpp
+#    app/mdht/profile.cpp
+#    app/mdht/socket_multicast.cpp )
 
-add_executable(guavaht ${guavaht_SRC})
-target_link_libraries(guavaht model_static eal_static pthread rt ${femas_libs} ${femasmd_libs}  ${bson_libs} ${fc_libs})
-add_dependencies(guavaht model_static)
-add_dependencies(guavaht eal_static)
+#add_executable(guavaht ${guavaht_SRC})
+#target_link_libraries(guavaht model_static eal_static pthread rt ${femas_libs} ${femasmd_libs}  ${bson_libs} ${fc_libs})
+#add_dependencies(guavaht model_static)
+#add_dependencies(guavaht eal_static)
 
 
 #Add HT strategy model
