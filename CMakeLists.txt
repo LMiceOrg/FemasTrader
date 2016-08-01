@@ -235,3 +235,14 @@ add_executable(fm2trader ${fm2trader_src})
 target_link_libraries(fm2trader model_static eal_static pthread rt ${femas_libs})
 add_dependencies(fm2trader model_static)
 add_dependencies(fm2trader eal_static)
+
+#Femas2.0 Trader, NetMD, strategy 3in1
+LIST(APPEND fm3in1_src app/fm3in1/netmd.cpp
+    app/fm3in1/fm2spi.cpp
+    app/fm3in1/strategy_ins.cpp
+)
+add_executable(fm3in1 ${fm3in1_src})
+
+target_link_libraries(fm3in1 model_static eal_static pthread rt ${femas_libs} pcap ${fc_libs})
+add_dependencies(fm3in1 model_static)
+add_dependencies(fm3in1 eal_static)
