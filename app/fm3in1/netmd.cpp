@@ -44,6 +44,7 @@ STRATEGY_CONF_P g_conf= &st_conf;
 CUstpFtdcInputOrderField g_order;
 int64_t g_begin_time = 0;
 int64_t g_end_time = 0;
+struct timeval g_pkg_time;
 
 /* netmd package callback */
 static void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_char* packet);
@@ -672,7 +673,10 @@ void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_c
 
     (void)pkthdr;
     (void)arg;
+    // callq  4e990 <_ZN12CFTDCPackage14PreparePackageEjhh>
 
+    g_pkg_time.tv_sec = pkthdr->ts.tv_sec;
+    g_pkg_time.tv_usec = pkthdr->ts.tv_usec;
 
 
     /** pub data */

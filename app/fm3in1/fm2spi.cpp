@@ -347,6 +347,13 @@ void CFemas2TraderSpi::OnRspUserLogin(CUstpFtdcRspUserLoginField *pRspUserLogin,
 	m_curid = atoi(pRspUserLogin->MaxOrderLocalID)+1;
     m_state = FMTRADER_LOGIN;
 
+    CUstpFtdcQryInstrumentField req;
+    memset(&req, 0, sizeof(req));
+    strcpy(req.ExchangeID, exchange_id());
+    strcpy(req.InstrumentID, "hc1610");
+    trader()->ReqQryInstrument(&req, req_id());
+    lmice_info_print("do ReqQryInstrument\n");
+
 /*
 	CUstpFtdcInputOrderField req;
 	memset(&req, 0, sizeof(CUstpFtdcInputOrderField));
@@ -494,36 +501,36 @@ void CFemas2TraderSpi::OnRspQryInvestorPosition(CUstpFtdcRspInvestorPositionFiel
 
 void CFemas2TraderSpi::OnRspOrderInsert(CUstpFtdcInputOrderField *pInputOrder, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
-    lmice_info_print("RspOrder insert\n");
-	
-	if (pInputOrder==NULL )
-	{
-			printf("û�в�ѯ����Լ����\n");
-			return ;
-	}
-	
-	if( pRspInfo != NULL )
-	{
-			printf("id:%d\n", pRspInfo->ErrorID);
-			printf("reason:%s\n", gbktoutf8(pRspInfo->ErrorMsg).c_str());
-	}
-	
+    lmice_info_print("RspOrder insert ");
+
+    if (pInputOrder==NULL )
+    {
+        printf("failed\n");
+        return ;
+    }
+
+    if( pRspInfo != NULL )
+    {
+        printf("id:%d\treason:%s\n", pRspInfo->ErrorID,
+               gbktoutf8(pRspInfo->ErrorMsg).c_str());
+    }
+
 }
 
 void CFemas2TraderSpi::OnRspOrderAction(CUstpFtdcOrderActionField *pOrderAction, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
-    lmice_info_print("ResOder action\n");
+    lmice_info_print("RspOrder action\n");
 }
 
 void CFemas2TraderSpi::OnRspError(CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
-	lmice_info_print("OnRspError\n");
+    lmice_info_print("OnRspError ");
 	
 	if( pRspInfo != NULL )
 	{
-		printf("id:%d\n", pRspInfo->ErrorID);
-		printf("req id:%d\n", nRequestID);
-		printf("reason:%s\n", gbktoutf8(pRspInfo->ErrorMsg).c_str());
+        printf("id:%d\treq id:%d\treason:%s\n", pRspInfo->ErrorID
+               , nRequestID
+               , gbktoutf8(pRspInfo->ErrorMsg).c_str());
 	}
 
 }
@@ -611,12 +618,10 @@ void CFemas2TraderSpi::OnRtnTrade(CUstpFtdcTradeField *pTrade)
         double fee =  fabs(left_pos) * g_cur_st->m_md.m_multiple * g_cur_st->m_md.m_last_price * g_cur_st->m_md.fee_rate;
         double pl = g_cur_st->m_acc.m_left_cash + left_pos * g_cur_st->m_md.m_multiple * g_cur_st->m_md.m_last_price - fee;
 
-        printf(" current_pl:%lf\n", pl);
-
         if( -pl >= g_conf->m_max_loss )
         {
             flatten_all(0, 0, 0);
-            lmice_critical_print("touch max loss,stop and exit\n");
+            lmice_critical_print("touch max loss[%lf],stop and exit\n", pl);
         }
     }
 
@@ -629,7 +634,7 @@ void CFemas2TraderSpi::OnRtnOrder(CUstpFtdcOrderField *pOrder)
 }
 
 void CFemas2TraderSpi::OnRtnInstrumentStatus(CUstpFtdcInstrumentStatusField *pInstrumentStatus) {
-
+lmice_info_print("OnRtnInstrumentStatus\n");
 }
 
 void CFemas2TraderSpi::OnRtnInvestorAccountDeposit(CUstpFtdcInvestorAccountDepositResField *pInvestorAccountDepositRes) {

@@ -49,6 +49,17 @@ using namespace std;
 ///freq check, 1min 120 round
 ///top check, 
 
+forceinline void do_order_insert(int volume) {
+    int64_t middle_time;
+    get_system_time(&middle_time);
+    g_spi->order_insert(0, &g_order, sizeof(CUstpFtdcInputOrderField));
+    get_system_time(&g_end_time);
+    printf("total time: %ld\torder insert time:%ld\tproc time:%ld\n\noperation: buy %s\tprice:%lf\tleft_volume:%d\torder size:%d\n",
+           g_end_time - ( ((int64_t)g_pkg_time.tv_sec)*1e7+((int64_t)g_pkg_time.tv_usec)*10),
+            g_end_time-middle_time,
+           g_end_time - g_begin_time,
+        g_order.OffsetFlag==USTP_FTDC_OF_CloseToday?"close":"open", g_order.LimitPrice, volume, g_order.Volume);
+}
 
 //call back function 
 void md_func(const char* symbol, const void* addr, int size)
@@ -281,13 +292,14 @@ void md_func(const char* symbol, const void* addr, int size)
                         }
                         //send order insert
 
-                        int64_t middle_time;
-                        get_system_time(&middle_time);
-                        g_spi->order_insert(symbol, &g_order, sizeof(CUstpFtdcInputOrderField));
-                        get_system_time(&g_end_time);
-                        printf("order insert time:%ld\t total time:%ld\n\noperation: buy %s\tprice:%lf\tleft_volume:%d\tleft_pos:%d\n",
-							g_end_time-middle_time, g_end_time - g_begin_time,
-							g_order.OffsetFlag==USTP_FTDC_OF_CloseToday?"close":"open", g_order.LimitPrice, md_data->AskBidInst.AskVolume1, left_pos_size);
+//                        int64_t middle_time;
+//                        get_system_time(&middle_time);
+//                        g_spi->order_insert(symbol, &g_order, sizeof(CUstpFtdcInputOrderField));
+//                        get_system_time(&g_end_time);
+//                        printf("order insert time:%ld\t total time:%ld\n\noperation: buy %s\tprice:%lf\tleft_volume:%d\tleft_pos:%d\n",
+//							g_end_time-middle_time, g_end_time - g_begin_time,
+//							g_order.OffsetFlag==USTP_FTDC_OF_CloseToday?"close":"open", g_order.LimitPrice, md_data->AskBidInst.AskVolume1, left_pos_size);
+                        do_order_insert(md_data->AskBidInst.AskVolume1);
                     }
 
                     if( forecast < md_data->AskBidInst.BidPrice1 )
@@ -313,13 +325,14 @@ void md_func(const char* symbol, const void* addr, int size)
                             g_order.OffsetFlag = USTP_FTDC_OF_Open;
                         }
                         //send order insert
-                        int64_t middle_time;
-                        get_system_time(&middle_time);
-                        g_spi->order_insert(symbol, &g_order, sizeof(CUstpFtdcInputOrderField));
-                        get_system_time(&g_end_time);
-                        printf("order insert time:%ld\t total time:%ld\n\noperation: sell %s\tprice:%lf\tleft_volume:%d\tleft_pos:%d\n",
-							g_end_time-middle_time, g_end_time - g_begin_time,
-							g_order.OffsetFlag==USTP_FTDC_OF_CloseToday?"close":"open", g_order.LimitPrice, md_data->AskBidInst.BidVolume1, left_pos_size);
+//                        int64_t middle_time;
+//                        get_system_time(&middle_time);
+//                        g_spi->order_insert(symbol, &g_order, sizeof(CUstpFtdcInputOrderField));
+//                        get_system_time(&g_end_time);
+//                        printf("order insert time:%ld\t total time:%ld\n\noperation: sell %s\tprice:%lf\tleft_volume:%d\tleft_pos:%d\n",
+//							g_end_time-middle_time, g_end_time - g_begin_time,
+//							g_order.OffsetFlag==USTP_FTDC_OF_CloseToday?"close":"open", g_order.LimitPrice, md_data->AskBidInst.BidVolume1, left_pos_size);
+                        do_order_insert(md_data->AskBidInst.BidVolume1);
                     }
 
 
