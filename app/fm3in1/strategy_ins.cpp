@@ -54,11 +54,20 @@ forceinline void do_order_insert(int volume) {
     get_system_time(&middle_time);
     g_spi->order_insert(0, &g_order, sizeof(CUstpFtdcInputOrderField));
     get_system_time(&g_end_time);
-    printf("total time: %ld\torder insert time:%ld\tproc time:%ld\n\noperation: buy %s\tprice:%lf\tleft_volume:%d\torder size:%d\n",
-           g_end_time - ( ((int64_t)g_pkg_time.tv_sec)*1e7+((int64_t)g_pkg_time.tv_usec)*10),
-            g_end_time-middle_time,
+    printf(//"ttal time:%ld\t"
+           "inst time:%ld\t"
+           "proc time:%ld\t"
+           "operation:%d\t"
+           "cur price:%lf\t"
+           "leftvlume:%d\t"
+           "ordr size:%d\n",
+           //g_end_time - ( ((int64_t)g_pkg_time.tv_sec)*1e7+((int64_t)g_pkg_time.tv_usec)*10),
+            g_end_time - middle_time,
            g_end_time - g_begin_time,
-        g_order.OffsetFlag==USTP_FTDC_OF_CloseToday?"close":"open", g_order.LimitPrice, volume, g_order.Volume);
+            g_order.OffsetFlag,
+           g_order.LimitPrice,
+           volume,
+           g_order.Volume);
 }
 
 //call back function 
