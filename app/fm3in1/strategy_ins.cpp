@@ -84,27 +84,10 @@ void md_func(const char* symbol, const void* addr, int size)
                 strcpy( md_msg.m_inst, md_data->InstTime.InstrumentID );
 
                 int64_t micro_time = 0;
-                time_t data_time1, current;
-                current = time(NULL);
-                struct tm t = *localtime(&current);
+            
+				get_system_time(&micro_time);
 
-                char data_time[16];
-                memset(data_time, 0, 16);
-                strcpy(data_time, md_data->InstTime.UpdateTime);
-
-                char tmp[8];
-                memset(tmp, 0, 8);
-                memcpy( tmp, data_time, 2 );
-                t.tm_hour = atoi(tmp);
-                memcpy( tmp, data_time+3, 2 );
-                t.tm_min = atoi(tmp);
-                memcpy( tmp, data_time+6, 2 );
-                t.tm_sec = atoi(tmp);
-                data_time1 = mktime(&t);
-                micro_time = (int64_t)data_time1 * 1000 * 1000;
-                micro_time += md_data->InstTime.UpdateMillisec * 1000;
-
-                md_msg.m_time_micro = micro_time;
+                md_msg.m_time_micro = micro_time/10;
 
                 md_msg.m_bid = md_data->AskBidInst.BidPrice1;
                 md_msg.m_offer =  md_data->AskBidInst.AskPrice1;
@@ -302,8 +285,9 @@ void md_func(const char* symbol, const void* addr, int size)
                         get_system_time(&middle_time);
                         g_spi->order_insert(symbol, &g_order, sizeof(CUstpFtdcInputOrderField));
                         get_system_time(&g_end_time);
-                        lmice_critical_print("order insert time:%ld\t total time:%ld\n",g_end_time-middle_time, g_end_time - g_begin_time);
-
+                        printf("order insert time:%ld\t total time:%ld\n\noperation: buy %s\tprice:%lf\tleft_volume:%d\tleft_pos:%d\n",
+							g_end_time-middle_time, g_end_time - g_begin_time,
+							g_order.OffsetFlag==USTP_FTDC_OF_CloseToday?"close":"open", g_order.LimitPrice, md_data->AskBidInst.AskVolume1, left_pos_size);
                     }
 
                     if( forecast < md_data->AskBidInst.BidPrice1 )
@@ -333,8 +317,9 @@ void md_func(const char* symbol, const void* addr, int size)
                         get_system_time(&middle_time);
                         g_spi->order_insert(symbol, &g_order, sizeof(CUstpFtdcInputOrderField));
                         get_system_time(&g_end_time);
-                        lmice_critical_print("order insert time:%ld\t total time:%ld\n",g_end_time-middle_time, g_end_time - g_begin_time);
-
+                        printf("order insert time:%ld\t total time:%ld\n\noperation: sell %s\tprice:%lf\tleft_volume:%d\tleft_pos:%d\n",
+							g_end_time-middle_time, g_end_time - g_begin_time,
+							g_order.OffsetFlag==USTP_FTDC_OF_CloseToday?"close":"open", g_order.LimitPrice, md_data->AskBidInst.BidVolume1, left_pos_size);
                     }
 
 
@@ -383,9 +368,9 @@ void status_func(const char* symbol, const void* addr, int size)
 
 	//if( 0 == strcmp( symbol, g_ins->m_spi_symbol[symbol_account] ) )
 	{
-		get_system_time(&systime_md);
-		memset(str_log, 0, sizeof(str_log));
-		sprintf( str_log, "[%ld]get trade msg,content:\n", systime_md );
+		//get_system_time(&systime_md);
+		//memset(str_log, 0, sizeof(str_log));
+		//sprintf( str_log, "[%ld]get trade msg,content:\n", systime_md );
         //g_spi->send( g_ins->m_spi_symbol[symbol_log], str_log, strlen(str_log) );
 	}
 
@@ -526,12 +511,12 @@ int strategy_ins::set_timeout()
 void strategy_ins::exit()
 {
 	
-	if( m_strategy != NULL )
-	{
-		double price = 0;
+	//if( m_strategy != NULL )
+	//{
+		//double price = 0;
 		//printf("=== flatten all ===\n");
         //m_strategy->send( m_spi_symbol[symbol_flatten], &price, sizeof(price));
-	}
+	//}
 	m_pause_flag = 1;
 	m_strategy->quit();
 	lmice_info_print("exit strategy instance\n");
