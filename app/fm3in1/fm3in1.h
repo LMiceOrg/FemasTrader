@@ -4,6 +4,7 @@
 #define MODEL_NAME_SIZE 32
 
 #include "fm2spi.h"
+#include "lmice_eal_thread.h"
 
 typedef struct strategy_conf{
     char m_model_name[MODEL_NAME_SIZE];

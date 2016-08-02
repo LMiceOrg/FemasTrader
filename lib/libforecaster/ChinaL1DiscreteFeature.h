@@ -5,6 +5,19 @@
 #include <string>
 #include <stdint.h>
 
+struct Dummy_ChinaL1Msg {
+    std::string m_inst;
+    int64_t m_time_micro; // time in epoch micro seconds
+    double m_bid;
+    double m_offer;
+    int32_t m_bid_quantity;
+    int32_t m_offer_quantity;
+    int32_t m_volume;
+    double m_notional;
+    double m_limit_up;
+    double m_limit_down;
+};
+
 class ChinaL1Msg {
 public:
 	ChinaL1Msg();

@@ -135,8 +135,9 @@ void md_func(const char* symbol, const void* addr, int size)
 
             #ifdef USE_CPLUS_LIB
                 Forecaster *fc = g_ins->get_forecaster();
-                ChinaL1Msg msg_data;
-                msg_data.set_inst( md_data->InstTime.InstrumentID );
+                static ChinaL1Msg msg_data;
+
+                //msg_data.set_inst( md_data->InstTime.InstrumentID );
 
                 int64_t micro_time = 0;
                 get_system_time(&micro_time);
@@ -161,20 +162,21 @@ void md_func(const char* symbol, const void* addr, int size)
 //                //sscanf("%d:%d:%d", md_data->InstTime.UpdateTime, t.tm_hour, t.tm_min, t.tm_sec);
 //                micro_time = (int64_t)data_time1 * 1000 * 1000;
 //                micro_time += md_data->InstTime.UpdateMillisec * 1000;
-                msg_data.set_time( micro_time );
-                msg_data.set_bid( md_data->AskBidInst.BidPrice1 );
-                msg_data.set_offer( md_data->AskBidInst.AskPrice1 );
-                msg_data.set_bid_quantity( md_data->AskBidInst.BidVolume1 );
-                msg_data.set_offer_quantity( md_data->AskBidInst.AskVolume1 );
-                msg_data.set_volume( md_data->PriVol.Volume );
-                msg_data.set_notinal( md_data->PriVol.Turnover );
-                msg_data.set_limit_up( 0 );
-                msg_data.set_limit_down( 0 );
+
+                Dummy_ChinaL1Msg& msg_dt = *(Dummy_ChinaL1Msg*)&msg_data;
+                msg_dt.m_inst = md_data->InstTime.InstrumentID;
+                msg_dt.m_time_micro = micro_time;
+                msg_dt.m_bid = md_data->AskBidInst.BidPrice1;
+                msg_dt.m_offer = md_data->AskBidInst.AskPrice1;
+                msg_dt.m_bid_quantity = md_data->AskBidInst.BidVolume1;
+                msg_dt.m_offer_quantity = md_data->AskBidInst.AskVolume1;
+                msg_dt.m_volume = md_data->PriVol.Volume ;
+                msg_dt.m_notional = md_data->PriVol.Turnover;
+                msg_dt.m_limit_up = 0;
+                msg_dt.m_limit_down = 0;
 
                 fc->update(msg_data);
                 double signal = fc->get_forecast();
-
-
 
             #ifdef FC_DEBUG
                 double arr_signal[12];

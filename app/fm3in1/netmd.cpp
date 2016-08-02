@@ -357,7 +357,8 @@ int main(int argc, char* argv[]) {
 
 
 
-    lmice_critical_print("FM3In1 -- a md app --\n");
+    lmice_critical_print("FM3In1[%x] -- a md app --\n", pthread_self());
+    pthread_setname_np(pthread_self(), "NetMD");
 
     /** Silence mode */
     init_daemon(silent);
@@ -476,11 +477,12 @@ int main(int argc, char* argv[]) {
     /** Unit test */
     if(test) {
         unit_test();
-        return 0;
+    } else {
+        /** Run in main thread */
+        netmd_pcap_thread(devname, filter);
+        /** flatten all */
+        g_spi->flatten_all(0, 0, 0);
     }
-
-    /** Run in main thread */
-    netmd_pcap_thread(devname, filter);
     /*
      * for(ret=0; ret<10; ++ret) {
         char buff[32] = {0};
@@ -490,20 +492,11 @@ int main(int argc, char* argv[]) {
     }
     */
 
-    /** Exit and maintain resource */
-    lmice_warning_print("Exit %s", md_name);
-//    for(i=0; i<keypos; ++i) {
-//        const void* addr;
-//        int count;
-//        uint64_t hval = keylist[i];
-//        lmspi_get_symbol_by_hval(g_spi, hval, &addr, &count);
-//        lmice_critical_print("sm%lX message size: %d\n", hval, count);
-//    }
-    lmspi_quit(g_spi);
-    lmspi_delete(g_spi);
-    //netmd_bf_delete();
 
-    lmice_critical_print("%s exit\n", md_name);
+    /** Exit and maintain resource */
+    lmice_warning_print("Exit %s\n", md_name);
+
+    //netmd_bf_delete();
 
     // 释放useapi实例
     pt->Release();

@@ -174,7 +174,7 @@ forceinline void soft_flatten(CFemas2TraderSpi* spi)
 
 
 CFemas2TraderSpi::CFemas2TraderSpi(CUstpFtdcTraderApi *pt, const char *name)
-    :CLMSpi(name, -1)
+    :CLMSpi(name, 0)
 {
     m_trader= pt;
     m_curid = 0;
@@ -308,7 +308,6 @@ void CFemas2TraderSpi::flatten_all(const char *symbol, const void *addr, int siz
 	hard_flatten(this);
 #endif
 
-	quit();	
     m_state = FMTRADER_UNKNOWN;
 }
 
@@ -327,15 +326,16 @@ void CFemas2TraderSpi::trade_instrument(const char *symbol, const void *addr, in
 
 void CFemas2TraderSpi::OnFrontConnected()
 {
+    pthread_setname_np(pthread_self(), "Femas2Trader");
     m_state = FMTRADER_LOGIN;
-    lmice_info_print("Femas2Trader connected, do login\n");
+    lmice_info_print("Femas2Trader[%x] connected, do login\n", pthread_self());
     login(this);
 }
 
 void CFemas2TraderSpi::OnFrontDisconnected(int nReason)
 {
     m_state = FMTRADER_DISCONNECTED;
-    lmice_error_print("Femas2Trader disconnected[%d]", nReason);
+    lmice_error_print("Femas2Trader disconnected[%d]\n", nReason);
 }
 
 void CFemas2TraderSpi::OnRspUserLogin(CUstpFtdcRspUserLoginField *pRspUserLogin, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
