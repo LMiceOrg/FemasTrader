@@ -24,4 +24,7 @@ extern STRATEGY_CONF_P g_conf; //= &st_conf;
 extern CUstpFtdcInputOrderField g_order;
 extern int64_t g_begin_time;
 extern int64_t g_end_time;
+
+
+
 #endif // FM3IN1_H

@@ -37,6 +37,8 @@ public:
     ///< Get properties
     //new request id
     int req_id();
+    //current request id
+    int current_id() const;
     //trader
     CUstpFtdcTraderApi* trader() const;
 	

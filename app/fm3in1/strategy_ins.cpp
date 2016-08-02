@@ -281,6 +281,7 @@ void md_func(const char* symbol, const void* addr, int size)
                             return;
                         }
                         order_size = left_pos_size < md_data->AskBidInst.AskVolume1 ? left_pos_size : md_data->AskBidInst.AskVolume1;
+                        g_order.Volume = order_size;
                         g_order.LimitPrice = md_data->AskBidInst.AskPrice1;
                         //printf("=== order_size: %d\n ===\n", order_size);
                         if( g_cur_st->m_pos.m_sell_pos >= order_size )
@@ -294,12 +295,13 @@ void md_func(const char* symbol, const void* addr, int size)
                             g_order.OffsetFlag = USTP_FTDC_OF_Open;
                         }
                         //send order insert
-                        g_order.Volume = order_size;
+
                         int64_t middle_time;
                         get_system_time(&middle_time);
                         g_spi->order_insert(symbol, &g_order, sizeof(CUstpFtdcInputOrderField));
                         get_system_time(&g_end_time);
                         lmice_critical_print("order insert time:%ld\t total time:%ld\n",g_end_time-middle_time, g_end_time - g_begin_time);
+
                     }
 
                     if( forecast < md_data->AskBidInst.BidPrice1 )
@@ -311,6 +313,7 @@ void md_func(const char* symbol, const void* addr, int size)
                         }
                         order_size = left_pos_size < md_data->AskBidInst.BidVolume1 ?
                                 left_pos_size : md_data->AskBidInst.BidVolume1;
+                        g_order.Volume = order_size;
                         g_order.LimitPrice = md_data->AskBidInst.BidPrice1;
 
                         if( g_cur_st->m_pos.m_buy_pos >= order_size )
@@ -324,12 +327,12 @@ void md_func(const char* symbol, const void* addr, int size)
                             g_order.OffsetFlag = USTP_FTDC_OF_Open;
                         }
                         //send order insert
-                        g_order.Volume = order_size;
                         int64_t middle_time;
                         get_system_time(&middle_time);
                         g_spi->order_insert(symbol, &g_order, sizeof(CUstpFtdcInputOrderField));
                         get_system_time(&g_end_time);
                         lmice_critical_print("order insert time:%ld\t total time:%ld\n",g_end_time-middle_time, g_end_time - g_begin_time);
+
                     }
 
 
@@ -381,7 +384,7 @@ void status_func(const char* symbol, const void* addr, int size)
 		get_system_time(&systime_md);
 		memset(str_log, 0, sizeof(str_log));
 		sprintf( str_log, "[%ld]get trade msg,content:\n", systime_md );
-		g_spi->send( g_ins->m_spi_symbol[symbol_log], str_log, strlen(str_log) );
+        //g_spi->send( g_ins->m_spi_symbol[symbol_log], str_log, strlen(str_log) );
 	}
 
 	//calculate pl
@@ -404,15 +407,15 @@ void status_func(const char* symbol, const void* addr, int size)
 
 //class function
 
-strategy_ins::strategy_ins(STRATEGY_CONF_P ptr_conf , CLMSpi *spi):m_exit_flag(0),m_pause_flag(0),m_ins_conf(ptr_conf)
+strategy_ins::strategy_ins(STRATEGY_CONF_P ptr_conf , CLMSpi *spi):m_exit_flag(0),m_pause_flag(0)
 {
 	lmice_info_print("model name: %s\nmax positon: %d\nmax loss: %lf\nclose value: %lf\n",
-                             m_ins_conf->m_model_name, m_ins_conf->m_max_pos, 
-                             m_ins_conf->m_max_loss, m_ins_conf->m_close_value);	
+                             g_conf->m_model_name, g_conf->m_max_pos,
+                             g_conf->m_max_loss, g_conf->m_close_value);
     m_strategy = spi;
     //m_status = new CUR_STATUS;
     //memset(m_status, 0, sizeof(CUR_STATUS));
-	memset( m_spi_symbol, 0, sizeof(m_spi_symbol));
+    //memset( m_spi_symbol, 0, sizeof(m_spi_symbol));
 
     //g_spi = m_strategy;
     //g_cur_st = m_status;
@@ -424,8 +427,8 @@ strategy_ins::strategy_ins(STRATEGY_CONF_P ptr_conf , CLMSpi *spi):m_exit_flag(0
 
 strategy_ins::~strategy_ins()
 {
-	delete m_status;
-	delete m_strategy;
+    //delete m_status;
+    //delete m_strategy;
 }
 
 void strategy_ins::init()
@@ -525,7 +528,7 @@ void strategy_ins::exit()
 	{
 		double price = 0;
 		//printf("=== flatten all ===\n");
-		m_strategy->send( m_spi_symbol[symbol_flatten], &price, sizeof(price));
+        //m_strategy->send( m_spi_symbol[symbol_flatten], &price, sizeof(price));
 	}
 	m_pause_flag = 1;
 	m_strategy->quit();

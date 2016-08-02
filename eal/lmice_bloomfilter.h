@@ -14,6 +14,10 @@
 /* bloom filter block unit size */
 #define LMICE_EAL_BF_BLOCK_SIZE 4096
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* hash function prototype */
 typedef uint32_t (*eal_bf_hash_func)(const unsigned char* ctx, uint32_t size);
 /* hash function list */
@@ -70,6 +74,10 @@ int eal_bf_find(lm_bloomfilter_t* bf, const uint32_t* val);
  * @return : 0 success else:faied
  */
 int eal_bf_add(lm_bloomfilter_t* bf, const uint32_t* val);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /** LMICE_BLOOMFILTER_H */
 

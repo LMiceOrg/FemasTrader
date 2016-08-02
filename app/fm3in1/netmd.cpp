@@ -75,11 +75,12 @@ static void unit_test(void);
 static int position = 11;
 static int bytes = sizeof(struct guava_udp_normal)+sizeof(struct guava_udp_head);
 static char md_name[32];
+/*
 #define MAX_KEY_LENGTH 512
 static uint64_t keylist[MAX_KEY_LENGTH];
 static volatile int keypos;
 static volatile int64_t netmd_pd_lock = 0;
-
+*/
 int main(int argc, char* argv[]) {
     uid_t uid = -1;
     int ret;
@@ -117,8 +118,8 @@ int main(int argc, char* argv[]) {
 
     memset(&st_conf, 0, sizeof(STRATEGY_CONF));
 
-    netmd_pd_lock = 0;
-    keypos = 0;
+    //netmd_pd_lock = 0;
+    //keypos = 0;
     memset(md_name, 0, sizeof(md_name));
     strcpy(md_name, "[fm3in1]");
 
@@ -491,13 +492,13 @@ int main(int argc, char* argv[]) {
 
     /** Exit and maintain resource */
     lmice_warning_print("Exit %s", md_name);
-    for(i=0; i<keypos; ++i) {
-        const void* addr;
-        int count;
-        uint64_t hval = keylist[i];
-        lmspi_get_symbol_by_hval(g_spi, hval, &addr, &count);
-        lmice_critical_print("sm%lX message size: %d\n", hval, count);
-    }
+//    for(i=0; i<keypos; ++i) {
+//        const void* addr;
+//        int count;
+//        uint64_t hval = keylist[i];
+//        lmspi_get_symbol_by_hval(g_spi, hval, &addr, &count);
+//        lmice_critical_print("sm%lX message size: %d\n", hval, count);
+//    }
     lmspi_quit(g_spi);
     lmspi_delete(g_spi);
     //netmd_bf_delete();
@@ -558,7 +559,7 @@ void unit_test(void) {
     const char* sym;
     void* addr;
     int len;
-    IncQuotaDataT dt[400];
+    IncQuotaDataT *dt = (IncQuotaDataT*)malloc(sizeof(IncQuotaData)*400);
     for(i=0; i<400; ++i) {
         memset(dt+i, 0, sizeof(IncQuotaDataT));
 
@@ -596,33 +597,34 @@ void unit_test(void) {
     }
     get_system_time(&t2);
     lmice_critical_print("unit test time:%ld, count:%d\n", t2-t1, cnt);
+    free(dt);
 }
 
-void netmd_bf_create(void) {
-    uint64_t n = MAX_KEY_LENGTH;
-    uint32_t m = 0;
-    uint32_t k = 0;
-    double f = 0.0001;
-    /* MAX_KEY_LENGTH items, and with 0.0001 false positive */
-    eal_bf_calculate(n, f, &m, &k, &f);
+//void netmd_bf_create(void) {
+//    uint64_t n = MAX_KEY_LENGTH;
+//    uint32_t m = 0;
+//    uint32_t k = 0;
+//    double f = 0.0001;
+//    /* MAX_KEY_LENGTH items, and with 0.0001 false positive */
+//    eal_bf_calculate(n, f, &m, &k, &f);
 
-    bflter = (lm_bloomfilter_t*)malloc(sizeof(lm_bloomfilter_t)+m);
-    memset(bflter, 0, sizeof(lm_bloomfilter_t)+m);
-    bflter->n = n;
-    bflter->f = f;
-    bflter->m = m;
-    bflter->k = k;
-    bflter->addr = (char*)bflter+ sizeof(lm_bloomfilter_t);
+//    bflter = (lm_bloomfilter_t*)malloc(sizeof(lm_bloomfilter_t)+m);
+//    memset(bflter, 0, sizeof(lm_bloomfilter_t)+m);
+//    bflter->n = n;
+//    bflter->f = f;
+//    bflter->m = m;
+//    bflter->k = k;
+//    bflter->addr = (char*)bflter+ sizeof(lm_bloomfilter_t);
 
-    lmice_critical_print("Bloomfilter initialized:\n\tn:%lu\n\tm:%u\n\tk:%u\n\tf:%5.15lf\n",
-                         n,m,k,f);
+//    lmice_critical_print("Bloomfilter initialized:\n\tn:%lu\n\tm:%u\n\tk:%u\n\tf:%5.15lf\n",
+//                         n,m,k,f);
 
-}
+//}
 
-void netmd_bf_delete(void) {
-    free(bflter);
-    bflter = NULL;
-}
+//void netmd_bf_delete(void) {
+//    free(bflter);
+//    bflter = NULL;
+//}
 
 
 /* netmd worker thread */
@@ -693,46 +695,46 @@ void netmd_pcap_stop(int sig) {
     }
 }
 
-static int key_compare(const void* key, const void* obj) {
-    const uint64_t* hval = (const uint64_t*)key;
-    const uint64_t* val = (const uint64_t*)obj;
+//static int key_compare(const void* key, const void* obj) {
+//    const uint64_t* hval = (const uint64_t*)key;
+//    const uint64_t* val = (const uint64_t*)obj;
 
-    if(*hval == *val)
-        return 0;
-    else if(*hval < *val)
-        return -1;
-    else
-        return 1;
-}
+//    if(*hval == *val)
+//        return 0;
+//    else if(*hval < *val)
+//        return -1;
+//    else
+//        return 1;
+//}
 
-forceinline int key_find_or_create(const char* symbol) {
-    uint64_t hval;
-    uint64_t *key = NULL;
-    hval = eal_hash64_fnv1a(symbol, 32);
+//forceinline int key_find_or_create(const char* symbol) {
+//    uint64_t hval;
+//    uint64_t *key = NULL;
+//    hval = eal_hash64_fnv1a(symbol, 32);
 
-    if(keypos == 0) {
-        keylist[keypos] = hval;
-        ++keypos;
-        return 1;
-    }
+//    if(keypos == 0) {
+//        keylist[keypos] = hval;
+//        ++keypos;
+//        return 1;
+//    }
 
-    key = (uint64_t*)bsearch(&hval, keylist, keypos, 8, key_compare);
-    if(key == NULL) {
-        /* create new element */
-        if(keypos < MAX_KEY_LENGTH) {
-            keylist[keypos] = hval;
-            ++keypos;
-            qsort(keylist, keypos, 8, key_compare);
-            return 1;
-        } else {
-            lmice_warning_print("Add key[%s] failed as list is full\n", symbol);
-            return -1;
-        }
-    }
+//    key = (uint64_t*)bsearch(&hval, keylist, keypos, 8, key_compare);
+//    if(key == NULL) {
+//        /* create new element */
+//        if(keypos < MAX_KEY_LENGTH) {
+//            keylist[keypos] = hval;
+//            ++keypos;
+//            qsort(keylist, keypos, 8, key_compare);
+//            return 1;
+//        } else {
+//            lmice_warning_print("Add key[%s] failed as list is full\n", symbol);
+//            return -1;
+//        }
+//    }
 
-    return 0;
+//    return 0;
 
-}
+//}
 
 forceinline void netmd_pub_data(const char* sym, const void* addr, int len) {
     size_t i;

@@ -71,9 +71,9 @@ public:
 	int set_exit() { m_exit_flag = 1; }
 
 public:
-	char m_spi_symbol[SPI_SYMBOL_PUB_COUNT][SPI_SYMBOL_SIZE];
-	CUR_STATUS_P m_status;
-	STRATEGY_CONF_P m_ins_conf;
+    //char m_spi_symbol[SPI_SYMBOL_PUB_COUNT][SPI_SYMBOL_SIZE];
+    //CUR_STATUS_P m_status;
+    //STRATEGY_CONF_P m_ins_conf;
 
 
 private:

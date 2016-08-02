@@ -8,6 +8,15 @@
 
 #include "fm3in1.h"
 
+#define update_localid(local_id) do {   \
+    int id = local_id;  \
+    int i;  \
+    for(i=0;i<12;++i) { \
+        g_order.UserOrderLocalID[11-i] = '0'+ (id % 10);    \
+        id = id / 10;   \
+    }   \
+} while(0)
+
 ///< Utilities
 forceinline void login(CFemas2TraderSpi* spi)
 {
@@ -28,10 +37,13 @@ forceinline void logout(CFemas2TraderSpi* spi) {
     spi->trader()->ReqUserLogout(&req, spi->req_id());
 }
 
+
+
 forceinline void orderinsert(CFemas2TraderSpi* spi, CUstpFtdcInputOrderField* preq) {
-	int local_id = spi->req_id();
-    CUstpFtdcInputOrderField& req = *preq;
-	sprintf(req.UserOrderLocalID, "%012d", local_id);
+    int local_id = spi->req_id();
+    update_localid(local_id);
+//    CUstpFtdcInputOrderField& req = *preq;
+//    sprintf(req.UserOrderLocalID, "%012d", local_id);
 
 /*	
 	strcpy(req.InstrumentID, "rb1610");
@@ -53,7 +65,7 @@ forceinline void orderinsert(CFemas2TraderSpi* spi, CUstpFtdcInputOrderField* pr
 	printf("InvestorID:%s\n", req.InvestorID);
 	printf("ins_name:%s\n", req.InstrumentID);
 */
-	spi->trader()->ReqOrderInsert(&req, local_id);
+    spi->trader()->ReqOrderInsert(preq, spi->current_id());
 /*
 	int64_t systime = 0;
 	get_system_time(&systime);
@@ -184,6 +196,11 @@ CFemas2TraderSpi::~CFemas2TraderSpi() {
 int CFemas2TraderSpi::req_id()
 {
     return ++m_curid;
+}
+
+int CFemas2TraderSpi::current_id() const
+{
+    return m_curid;
 }
 
 CUstpFtdcTraderApi* CFemas2TraderSpi::trader() const {
@@ -489,7 +506,7 @@ void CFemas2TraderSpi::OnRspOrderInsert(CUstpFtdcInputOrderField *pInputOrder, C
 	
 	if (pInputOrder==NULL )
 	{
-			printf("Ã»ÓÐ²éÑ¯µ½ºÏÔ¼Êý¾Ý\n");
+			printf("Ã»ï¿½Ð²ï¿½Ñ¯ï¿½ï¿½ï¿½ï¿½Ô¼ï¿½ï¿½ï¿½ï¿½\n");
 			return ;
 	}
 	

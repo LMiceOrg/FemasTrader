@@ -166,7 +166,9 @@ forceinline void proc_event(spi_private* p) {
             break;
         }
         if(p->quit_flag == 1) {
-            sigterm_handler(sig);
+            if(sigterm_handler) {
+                sigterm_handler(SIGTERM);
+            }
             lmice_critical_print("Quit worker process\n");
             break;
         }
