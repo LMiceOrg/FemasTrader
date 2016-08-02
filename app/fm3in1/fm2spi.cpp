@@ -110,30 +110,22 @@ forceinline void investorposition(CFemas2TraderSpi* spi)
 
 forceinline void hard_flatten(CFemas2TraderSpi* spi)
 {
-	CUstpFtdcInputOrderField req;
-	memset( &req, 0, sizeof(CUstpFtdcInputOrderField) );
-    strcpy(req.InstrumentID, g_cur_st->m_ins_name);
-	req.OrderPriceType = USTP_FTDC_OPT_LimitPrice;
-	req.OffsetFlag = USTP_FTDC_OF_CloseToday;
-	req.HedgeFlag = USTP_FTDC_CHF_Speculation;
-	req.TimeCondition = USTP_FTDC_TC_IOC;
-	req.VolumeCondition = USTP_FTDC_VC_AV;
-	req.ForceCloseReason = USTP_FTDC_FCR_NotForceClose;
-	
-    req.Volume = g_cur_st->m_pos.m_buy_pos;
-	req.Direction = USTP_FTDC_D_Sell;
-    req.LimitPrice = g_cur_st->m_md.m_down_price;
-	if( req.Volume > 0 )
+	if( g_cur_st->m_pos.m_buy_pos > 0 )
 	{
-		orderinsert( spi, &req );
+		g_order.Volume = g_cur_st->m_pos.m_buy_pos;
+		g_order.OffsetFlag = USTP_FTDC_OF_CloseToday;
+		g_order.Direction = USTP_FTDC_D_Sell;
+    	g_order.LimitPrice = g_cur_st->m_md.m_down_price;
+		orderinsert( spi, &g_order );
 	}
 
-    req.Volume = g_cur_st->m_pos.m_sell_pos;
-	req.Direction = USTP_FTDC_D_Buy;
-    req.LimitPrice = g_cur_st->m_md.m_up_price;
-	if( req.Volume > 0 )
+	if( g_cur_st->m_pos.m_sell_pos > 0 )
 	{
-		orderinsert( spi, &req );
+		g_order.Volume = g_cur_st->m_pos.m_sell_pos;
+		g_order.OffsetFlag = USTP_FTDC_OF_CloseToday;
+		g_order.Direction = USTP_FTDC_D_Buy;
+    	g_order.LimitPrice = g_cur_st->m_md.m_up_price;
+		orderinsert( spi, &g_order );
 	}
 	
 }
