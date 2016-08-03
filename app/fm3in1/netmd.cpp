@@ -20,6 +20,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/types.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <vector>
 #include <string>
@@ -85,6 +87,7 @@ static volatile int64_t netmd_pd_lock = 0;
 */
 
 static inline void guava_md(int mc_port, const char* mc_group, const char* mc_bindip);
+void guava_md_stop(int sig);
 
 int main(int argc, char* argv[]) {
     uid_t uid = -1;
@@ -776,7 +779,7 @@ void guava_md_stop(int sig) {
 
 static inline void guava_md(int mc_port, const char *mc_group, const char *mc_bindip) {
     int m_sock = socket(PF_INET, SOCK_DGRAM, 0);
-    if(MY_SOCKET_ERROR == m_sock)
+    if(-1 == m_sock)
     {
         return;
     }
