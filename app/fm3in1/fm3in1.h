@@ -5,6 +5,7 @@
 
 #include "fm2spi.h"
 #include "lmice_eal_thread.h"
+#include "ChinaL1DiscreteFeature.h"
 
 typedef struct strategy_conf{
     char m_model_name[MODEL_NAME_SIZE];
@@ -26,7 +27,7 @@ extern CUstpFtdcInputOrderField g_order;
 extern int64_t g_begin_time;
 extern int64_t g_end_time;
 extern struct timeval g_pkg_time;
-
+extern ChinaL1Msg msg_data;
 
 
 #endif // FM3IN1_H

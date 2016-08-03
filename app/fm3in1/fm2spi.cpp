@@ -351,6 +351,7 @@ void CFemas2TraderSpi::OnRspUserLogin(CUstpFtdcRspUserLoginField *pRspUserLogin,
     memset(&req, 0, sizeof(req));
     strcpy(req.ExchangeID, exchange_id());
     strcpy(req.InstrumentID, "hc1610");
+    strcpy(req.ProductID, "fmdemo");
     trader()->ReqQryInstrument(&req, req_id());
     lmice_info_print("do ReqQryInstrument\n");
 

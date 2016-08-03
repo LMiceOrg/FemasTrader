@@ -42,6 +42,7 @@ CUR_STATUS_P g_cur_st=&g_cur_status;
 STRATEGY_CONF st_conf;
 STRATEGY_CONF_P g_conf= &st_conf;
 CUstpFtdcInputOrderField g_order;
+ChinaL1Msg msg_data;
 int64_t g_begin_time = 0;
 int64_t g_end_time = 0;
 struct timeval g_pkg_time;
@@ -112,8 +113,8 @@ int main(int argc, char* argv[]) {
     memset( &g_cur_status, 0, sizeof(CUR_STATUS));
     //to be add,add trade insturment message and update to st
     g_cur_status.m_md.fee_rate = 0.000101 + 0.0000006;
-    g_cur_status.m_md.m_up_price = 2787;
-    g_cur_status.m_md.m_down_price = 2472;
+    g_cur_status.m_md.m_up_price = 2847;
+    g_cur_status.m_md.m_down_price = 2524;
     g_cur_status.m_md.m_last_price = 0;
     g_cur_status.m_md.m_multiple = 10;
 
@@ -456,6 +457,9 @@ int main(int argc, char* argv[]) {
         lmice_info_print("ref symbol:%s\n", array_ref_ins[i].c_str());
     }
 
+    //Dummy_ChinaL1Msg& msg_dt = *(Dummy_ChinaL1Msg*)&msg_data;
+    //msg_dt.m_inst.resize(32, 0);
+
 
     /** Create LMiced spi */
 //    g_spi = lmspi_create(md_name, -1);
@@ -745,11 +749,13 @@ forceinline void netmd_pub_data(const char* sym, const void* addr, int len) {
        // lmice_critical_print("md_func %s\n", sym);
 
         md_func(sym, addr, len);
+        lmice_critical_print("pcap time:%ld\n", g_begin_time - g_pkg_time.tv_sec*10000000L - g_pkg_time.tv_usec*10L);
     } else {
         for(i=0; i< array_ref_ins.size(); ++i) {
             if(strcmp(array_ref_ins[i].c_str(), sym ) == 0) {
 
                 md_func(sym, addr, len);
+                lmice_critical_print("pcap time:%ld\n", g_begin_time - g_pkg_time.tv_sec*10000000L - g_pkg_time.tv_usec*10L);
                 //lmice_critical_print("md_func %s\n", sym);
                 break;
             }
