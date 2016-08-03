@@ -350,10 +350,19 @@ void CFemas2TraderSpi::OnRspUserLogin(CUstpFtdcRspUserLoginField *pRspUserLogin,
     CUstpFtdcQryInstrumentField req;
     memset(&req, 0, sizeof(req));
     strcpy(req.ExchangeID, exchange_id());
-    strcpy(req.InstrumentID, "hc1610");
+    strcpy(req.InstrumentID, trading_instrument);
     //strcpy(req.ProductID, "fmdemo");
     trader()->ReqQryInstrument(&req, req_id());
     lmice_info_print("do ReqQryInstrument\n");
+
+    CUstpFtdcQryInvestorFeeField fee;
+    strcpy(fee.BrokerID, broker_id());
+    strcpy(fee.ExchangeID, exchange_id());
+    strcpy(fee.InstrumentID, trading_instrument);
+    strcpy(fee.InvestorID, investor_id());
+    strcpy(fee.UserID, user_id());
+    trader()->ReqQryInvestorFee(&fee, req_id());
+    lmice_info_print("do ReqQryInvestorFee\n");
 
 /*
 	CUstpFtdcInputOrderField req;
@@ -638,8 +647,33 @@ void CFemas2TraderSpi::OnRtnInstrumentStatus(CUstpFtdcInstrumentStatusField *pIn
 lmice_info_print("OnRtnInstrumentStatus\n");
 }
 void CFemas2TraderSpi::OnRspQryInstrument(CUstpFtdcRspInstrumentField *p, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast) {
-lmice_info_print("OnRspQryInstrument:%s m=%d, h=%lf, l=%lf\n", p->InstrumentID, p->VolumeMultiple,
-	p->UpperLimitPrice, p->LowerLimitPrice);
+    lmice_info_print("OnRspQryInstrument:%s m=%d, h=%lf, l=%lf\n", p->InstrumentID, p->VolumeMultiple,
+        p->UpperLimitPrice, p->LowerLimitPrice);
+    g_cur_status.m_md.m_multiple = p->VolumeMultiple;
+    g_cur_status.m_md.m_down_price = p->LowerLimitPrice;
+    g_cur_status.m_md.m_up_price = p->UpperLimitPrice;
+}
+
+void CFemas2TraderSpi::OnRspQryInvestorFee(CUstpFtdcInvestorFeeField *p, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+{
+    //  ///开仓手续费按比例
+    //    TUstpFtdcRatioType	OpenFeeRate;
+    //	///开仓手续费按手数
+    //	TUstpFtdcRatioType	OpenFeeAmt;
+    //	///平仓手续费按比例
+    //	TUstpFtdcRatioType	OffsetFeeRate;
+    //	///平仓手续费按手数
+    //	TUstpFtdcRatioType	OffsetFeeAmt;
+    //	///平今仓手续费按比例
+    //	TUstpFtdcRatioType	OTFeeRate;
+    //	///平今仓手续费按手数
+    //	TUstpFtdcRatioType	OTFeeAmt;
+    lmice_info_print("OnRspQryInvestorFee:%s OpenFeeRate=%lf OpenFeeAmt=%lf OffsetFeeRate=%lf OffsetFeeAmt=%lf"
+                     "OTFeeRate=%lf, OTFeeAmt=%lf\n", p->InstrumentID, p->OpenFeeRate,
+                     p->OpenFeeAmt, p->OffsetFeeRate, p->OffsetFeeAmt,
+                     p->OTFeeRate, p->OTFeeAmt
+                     );
+    g_cur_status.m_md.fee_rate = p->OTFeeRate;
 }
 
 void CFemas2TraderSpi::OnRtnInvestorAccountDeposit(CUstpFtdcInvestorAccountDepositResField *pInvestorAccountDepositRes) {
