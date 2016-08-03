@@ -351,7 +351,7 @@ void CFemas2TraderSpi::OnRspUserLogin(CUstpFtdcRspUserLoginField *pRspUserLogin,
     memset(&req, 0, sizeof(req));
     strcpy(req.ExchangeID, exchange_id());
     strcpy(req.InstrumentID, "hc1610");
-    strcpy(req.ProductID, "fmdemo");
+    //strcpy(req.ProductID, "fmdemo");
     trader()->ReqQryInstrument(&req, req_id());
     lmice_info_print("do ReqQryInstrument\n");
 
@@ -636,6 +636,10 @@ void CFemas2TraderSpi::OnRtnOrder(CUstpFtdcOrderField *pOrder)
 
 void CFemas2TraderSpi::OnRtnInstrumentStatus(CUstpFtdcInstrumentStatusField *pInstrumentStatus) {
 lmice_info_print("OnRtnInstrumentStatus\n");
+}
+void CFemas2TraderSpi::OnRspQryInstrument(CUstpFtdcRspInstrumentField *p, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast) {
+lmice_info_print("OnRspQryInstrument:%s m=%d, h=%lf, l=%lf\n", p->InstrumentID, p->VolumeMultiple,
+	p->UpperLimitPrice, p->LowerLimitPrice);
 }
 
 void CFemas2TraderSpi::OnRtnInvestorAccountDeposit(CUstpFtdcInvestorAccountDepositResField *pInvestorAccountDepositRes) {
