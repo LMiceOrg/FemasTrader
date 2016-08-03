@@ -83,6 +83,9 @@ static uint64_t keylist[MAX_KEY_LENGTH];
 static volatile int keypos;
 static volatile int64_t netmd_pd_lock = 0;
 */
+
+static inline void guava_md(int mc_port, const char* mc_group, const char* mc_bindip);
+
 int main(int argc, char* argv[]) {
     uid_t uid = -1;
     int ret;
@@ -477,14 +480,16 @@ int main(int argc, char* argv[]) {
     //netmd_bf_create();
 
     /** Register signal handler */
-    g_spi->register_signal(netmd_pcap_stop);
+    //g_spi->register_signal(netmd_pcap_stop);
+    g_spi->register_signal(guava_md_stop);
 
     /** Unit test */
     if(test) {
         unit_test();
     } else {
         /** Run in main thread */
-        netmd_pcap_thread(devname, filter);
+        //netmd_pcap_thread(devname, filter);
+        guava_md(mc_port, mc_group, mc_bindip);
         /** flatten all */
         g_spi->flatten_all(0, 0, 0);
     }
@@ -759,6 +764,92 @@ forceinline void netmd_pub_data(const char* sym, const void* addr, int len) {
                 //lmice_critical_print("md_func %s\n", sym);
                 break;
             }
+        }
+    }
+
+}
+
+volatile int g_guava_quit_flag = 0;
+void guava_md_stop(int sig) {
+    g_guava_quit_flag = 1;
+}
+
+static inline void guava_md(int mc_port, const char *mc_group, const char *mc_bindip) {
+    int m_sock = socket(PF_INET, SOCK_DGRAM, 0);
+    if(MY_SOCKET_ERROR == m_sock)
+    {
+        return;
+    }
+
+    //socket可以重新使用一个本地地址
+    int flag=1;
+    if(setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&flag, sizeof(flag)) != 0)
+    {
+        return;
+    }
+
+    int options = fcntl(m_sock, F_GETFL);
+    if(options < 0)
+    {
+        return;
+    }
+    options = options | O_NONBLOCK;
+    int i_ret = fcntl(m_sock, F_SETFL, options);
+    if(i_ret < 0)
+    {
+        return;
+    }
+
+    struct sockaddr_in local_addr;
+    memset(&local_addr, 0, sizeof(local_addr));
+    local_addr.sin_family = AF_INET;
+    local_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    local_addr.sin_port = htons(mc_port);	//multicast port
+    if (bind(m_sock, (struct sockaddr*)&local_addr, sizeof(local_addr)) < 0)
+    {
+        return;
+    }
+
+    struct ip_mreq mreq;
+    mreq.imr_multiaddr.s_addr = inet_addr(mc_group);	//multicast group ip
+    mreq.imr_interface.s_addr = inet_addr(mc_bindip);
+
+    if (setsockopt(m_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) != 0)
+    {
+        return;
+    }
+
+    int receive_buf_size  = 65536;
+    if (setsockopt(m_sock, SOL_SOCKET, SO_RCVBUF, (const char*)&receive_buf_size, sizeof(receive_buf_size)) != 0)
+    {
+        return;
+    }
+
+    char line[65536];
+    struct sockaddr_in muticast_addr;
+    socklen_t len = sizeof(sockaddr_in);
+    for(;;) {
+        int n_rcved = -1;
+        n_rcved = recvfrom(m_sock, line, receive_buf_size, 0, (struct sockaddr*)&muticast_addr, &len);
+
+        if ( n_rcved < 0)
+        {
+            continue;
+        }
+        else if (0 == n_rcved)
+        {
+            continue;
+        }
+        else
+        {
+            netmd_pub_data(line+position, line, n_rcved);
+        }
+
+        //检测线程退出信号
+        if (g_guava_quit_flag == 1)
+        {
+            //此时已关闭完所有的客户端
+            return NULL;
         }
     }
 
