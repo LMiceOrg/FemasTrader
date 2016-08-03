@@ -355,14 +355,7 @@ void CFemas2TraderSpi::OnRspUserLogin(CUstpFtdcRspUserLoginField *pRspUserLogin,
     trader()->ReqQryInstrument(&req, req_id());
     lmice_info_print("do ReqQryInstrument\n");
 
-    CUstpFtdcQryInvestorFeeField fee;
-    strcpy(fee.BrokerID, broker_id());
-    strcpy(fee.ExchangeID, exchange_id());
-    strcpy(fee.InstrumentID, trading_instrument);
-    strcpy(fee.InvestorID, investor_id());
-    strcpy(fee.UserID, user_id());
-    trader()->ReqQryInvestorFee(&fee, req_id());
-    lmice_info_print("do ReqQryInvestorFee\n");
+
 
 /*
 	CUstpFtdcInputOrderField req;
@@ -652,6 +645,16 @@ void CFemas2TraderSpi::OnRspQryInstrument(CUstpFtdcRspInstrumentField *p, CUstpF
     g_cur_status.m_md.m_multiple = p->VolumeMultiple;
     g_cur_status.m_md.m_down_price = p->LowerLimitPrice;
     g_cur_status.m_md.m_up_price = p->UpperLimitPrice;
+
+    sleep(1);
+    CUstpFtdcQryInvestorFeeField fee;
+    strcpy(fee.BrokerID, broker_id());
+    strcpy(fee.ExchangeID, exchange_id());
+    strcpy(fee.InstrumentID, trading_instrument);
+    strcpy(fee.InvestorID, investor_id());
+    strcpy(fee.UserID, user_id());
+    trader()->ReqQryInvestorFee(&fee, req_id());
+    lmice_info_print("do ReqQryInvestorFee\n");
 }
 
 void CFemas2TraderSpi::OnRspQryInvestorFee(CUstpFtdcInvestorFeeField *p, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
