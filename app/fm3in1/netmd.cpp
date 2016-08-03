@@ -834,25 +834,20 @@ static inline void guava_md(int mc_port, const char *mc_group, const char *mc_bi
     for(;;) {
         int n_rcved = -1;
         n_rcved = recvfrom(m_sock, line, receive_buf_size, 0, (struct sockaddr*)&muticast_addr, &len);
-
-        if ( n_rcved < 0)
-        {
-            continue;
-        }
-        else if (0 == n_rcved)
-        {
-            continue;
-        }
-        else
-        {
-            netmd_pub_data(line+position, line, n_rcved);
-        }
-
         //检测线程退出信号
         if (g_guava_quit_flag == 1)
         {
             //此时已关闭完所有的客户端
-            return NULL;
+            return;
+        }
+
+        if ( n_rcved > 0)
+        {
+            netmd_pub_data(line+position, line, n_rcved);;
+        }
+        else
+        {
+            continue;
         }
     }
 
