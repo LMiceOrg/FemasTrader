@@ -246,3 +246,14 @@ add_executable(fm3in1 ${fm3in1_src})
 target_link_libraries(fm3in1 model_static eal_static pthread rt ${femas_libs} pcap ${fc_libs})
 add_dependencies(fm3in1 model_static)
 add_dependencies(fm3in1 eal_static)
+
+#histroy simulator 
+LIST(APPEND his_sim_src app/his_sim/netmd.cpp
+    app/his_sim/fm2spi.cpp
+    app/his_sim/strategy_ins.cpp
+)
+add_executable(his_sim ${his_sim_src})
+
+target_link_libraries(his_sim model_static eal_static pthread rt ${femas_libs} pcap ${fc_libs})
+add_dependencies(his_sim model_static)
+add_dependencies(his_sim eal_static)
