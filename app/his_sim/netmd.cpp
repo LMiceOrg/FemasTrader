@@ -41,6 +41,7 @@ char trading_instrument[32];
 char g_cur_sysid[31];
 
 std::vector<std::string> array_ref_ins;
+std::vector<std::string> array_feature_name; 
 
 /* timer sturct */
 struct itimerval g_tick;
@@ -66,6 +67,8 @@ struct timeval g_pkg_time;
 double g_thresh_num = 0.3;
 
 int g_done_flag = 1;
+double g_signal_multiplier = 1;
+
 
 /* netmd package callback */
 static void netmd_pcap_callback(u_char *arg, const struct pcap_pkthdr* pkthdr,const u_char* packet);
@@ -99,6 +102,7 @@ static void unit_test(void);
 /* get pcap file list */
 static int hs_get_file_list( string path, vector<string> &pcap_file_list );
 static int hs_load_file( string filename, vector<P_HS_MD_T> &pcap_md_list );
+static int hs_wirte_log( string filename, int check_write );
 static int hs_write_result( string filename );
 static int hs_write_stastic();
 static void hs_reset_global(void);
@@ -125,9 +129,15 @@ int g_active_sell_orders = 0;
 char log_buffer[HS_LOG_BUFFER_LEN];
 int log_pos = 0;
 
+char signal_log_buffer[HS_LOG_BUFFER_LEN];
+int signal_log_pos = 0;
+int signal_log_line = 0;
+
 char stastic_buffer[HS_LOG_BUFFER_LEN];
 int stastic_pos = 0;
 
+double session_fee = 0;
+int session_trading_times = 0;
 /*
 #define MAX_KEY_LENGTH 512
 static uint64_t keylist[MAX_KEY_LENGTH];
@@ -138,6 +148,8 @@ static volatile int64_t netmd_pd_lock = 0;
 static inline void guava_md(int mc_port, const char* mc_group, const char* mc_bindip);
 void guava_md_stop(int sig);
 
+
+static std::string log_file_name;
 int main(int argc, char* argv[]) {
     uid_t uid = -1;
     int ret;
@@ -167,11 +179,13 @@ int main(int argc, char* argv[]) {
     memset( &g_cur_status, 0, sizeof(CUR_STATUS));
     //to be add,add trade insturment message and update to st
     g_cur_status.m_md.fee_rate = 0.000101 + 0.0000006;
-    g_cur_status.m_md.m_up_price = 2847;
-    g_cur_status.m_md.m_down_price = 2524;
+    g_cur_status.m_md.m_up_price = 65535;
+    g_cur_status.m_md.m_down_price = 0;
     g_cur_status.m_md.m_last_price = 0;
     g_cur_status.m_md.m_multiple = 10;
 	g_cur_status.m_md.m_price_tick = 1;
+
+	const double rebate_rate = 0.3;
 	
     memset(&st_conf, 0, sizeof(STRATEGY_CONF));
 	st_conf.m_max_pos = 3;
@@ -351,7 +365,7 @@ int main(int argc, char* argv[]) {
         {
             if(i+1<argc) {
                 cmd = argv[++i];
-               	g_cur_status.m_md.m_price_tick = atoi(cmd);
+               	g_cur_status.m_md.m_price_tick = atof(cmd);
             }
             else
             {
@@ -371,6 +385,19 @@ int main(int argc, char* argv[]) {
                 lmice_error_print("Command(%s) require max loss can make(double)\n", cmd);
                 return 1;
             }
+        }
+		else if(strcmp(cmd, "-ss") == 0 ||
+                strcmp(cmd, "--ssignal") == 0)
+        {
+            if(i+1<argc) {
+                cmd = argv[++i];
+                g_signal_multiplier = atof(cmd);
+            }
+            else
+            {
+                lmice_error_print("Command(%s) require signal multiplier can make(double)\n", cmd);
+                return 1;
+            }
         } else if(strcmp(cmd, "-tf") == 0 ||
                   strcmp(cmd, "--tfront") == 0) {
             if(i+1 < argc) {
@@ -387,7 +414,7 @@ int main(int argc, char* argv[]) {
                 cmd = argv[i+1];
                 memset(user, 0, sizeof(user));
                 strncpy(user, cmd, sizeof(user)-1);
-                //投资人ID＝ 用户ID［去除前面的交易商ID］
+                //投资人ID�?用户ID［去除前面的交易商ID�?
                 investor = user + strlen(broker);
             } else {
                 lmice_error_print("Trader Command(%s) require user id string\n", cmd);
@@ -409,7 +436,7 @@ int main(int argc, char* argv[]) {
                 cmd = argv[i+1];
                 memset(broker, 0, sizeof(broker));
                 strncpy(broker, cmd, sizeof(broker)-1);
-                //投资人ID＝ 用户ID［去除前面的交易商ID］
+                //投资人ID�?用户ID［去除前面的交易商ID�?
                 investor = user + strlen(broker);
             } else {
                 lmice_error_print("Trader Command(%s) require broker string\n", cmd);
@@ -442,8 +469,8 @@ int main(int argc, char* argv[]) {
 
 
     /** Strategy */
-    g_ins = new strategy_ins(&st_conf, g_spi);
-	
+	printf("===== strategy ins name: %s =====\n", md_name);
+    g_ins = new strategy_ins(md_name, &st_conf, g_spi);
     memcpy(trading_instrument,
            g_ins->get_forecaster()->get_trading_instrument().c_str(),
            g_ins->get_forecaster()->get_trading_instrument().size());
@@ -459,6 +486,11 @@ int main(int argc, char* argv[]) {
 		p_tmp_md = new HS_MD_T;
 		memset(p_tmp_md, 0, sizeof(HS_MD_T));
 		g_valid_md[array_ref_ins[i]] = p_tmp_md;
+    }
+
+	array_feature_name = g_ins->get_forecaster()->get_subsignal_name();
+    for(i=0; i<array_feature_name.size(); ++i) {
+        lmice_info_print("feature name:%s\n", array_feature_name[i].c_str());
     }
 
 	/** Order */
@@ -481,7 +513,7 @@ int main(int argc, char* argv[]) {
 		if(res > 0)
 		{
 			memset(stastic_buffer, 0, HS_LOG_BUFFER_LEN);
-			sprintf(stastic_buffer, "instrument, date, PNL\n");
+			sprintf(stastic_buffer, "instrument, date, profit, trading times, fee, rebate, PNL with rebate\n");
 			stastic_pos = strlen(stastic_buffer);
 		}
 		else
@@ -499,21 +531,28 @@ int main(int argc, char* argv[]) {
 			printf("file name: %s\n", (*it).substr(start).c_str());
 			
 			string res_file_name = "./log_result/result_";
+			log_file_name = "./log_result/future_log_";
+			//log_file_name.append(trading_instrument);
+			log_file_name.append("_");
 			res_file_name.append((*it).substr(start+8,10));
+			log_file_name.append((*it).substr(start+8,10));
 			int file_hour = atoi((*it).substr(start+20,2).c_str());
 	
 			//int file_day = atoi((*it).substr(start+16,2))
 			if( file_hour >= 20 )
 			{
 				res_file_name.append("_21-00.csv");
+				log_file_name.append("_21-00.log");
 			}
 			else if( file_hour <= 8 )
 			{
 				res_file_name.append("_09-00.csv");
+				log_file_name.append("_09-00.log");
 			}
 			else
 			{
 				res_file_name.append("_13-30.csv");
+				log_file_name.append("_13-30.log");
 			}
 
 			string file_date = res_file_name.substr( res_file_name.size()-20, 16 );
@@ -523,17 +562,27 @@ int main(int argc, char* argv[]) {
 			memset( log_buffer, 0, HS_LOG_BUFFER_LEN );
 			sprintf( log_buffer, "instrument,time,direction,operation,price,volume,money,fee\n" );
 			log_pos = strlen(log_buffer);
+
+			memset(signal_log_buffer, 0, sizeof(signal_log_buffer));
+			signal_log_line = 0;
+			signal_log_pos = 0;
+			
 			hs_load_file( (*it), pcap_md_list );
 			double PNL = calc_result(pcap_md_list);
 			pcap_md_list.clear();
+			hs_wirte_log( log_file_name, 0 );
 			hs_write_result(res_file_name);
 			hs_reset_global();
-			sprintf( stastic_buffer+stastic_pos, "%f\n", PNL );
+			double rebate = session_fee * rebate_rate;
+			sprintf( stastic_buffer+stastic_pos, "%f, %d, %f, %f, %f\n", PNL, session_trading_times, session_fee, rebate, PNL+rebate);
 			stastic_pos = strlen( stastic_buffer );
+			session_trading_times = 0;
+			session_fee = 0;
 		}
     } 
 
 	printf("====== stastics ======\n%s\n", stastic_buffer);
+	printf("==start write==");
 	hs_write_stastic();
 
     /** Exit and maintain resource */
@@ -556,32 +605,21 @@ int init_daemon(int silent) {
 }
 
 void print_usage(void) {
-    printf("NetMD -- a md app --\n\n"
+    printf("his_sim -- histroy simulator app --\n\n"
            "\t-h, --help\t\tshow this message\n"
-           "\t-n, --name\t\tset module name\n"
-           "\t-d, --device\t\tset adapter device name\n"
-           "\t-u, --uid\t\tset user id when running\n"
+           "\t-n, --name\t\tset strategy name\n"
            "\t-s, --silent\t\trun in silent mode[backend]\n"
-           "\t-f, --filter\t\tfilter to run pcap\n"
            "\t-p, --path\t\tpath of dump packet directory\n"
            "\t-c, --cpuset\t\tSet cpuset for this app(, separated)\n"
-           "\t-t, --test\t\tUnit test\n"
 
-           "strategyht: --\n"
-          "\t-sv, --svalue\t\tyesterday value of corresponding account\n"
-          "\t-sp, --sposition\t\tmax position can hold\n"
+          "\t-sp, --sposition\tmax position can hold\n"
           "\t-sl, --sloss\t\tmax loss can make\n"
           "\t-sf, --sfee\t\tfee rate\n"
-		  "\t-sm, --smultiple\t\tmultiple\n"
-		  "\t-st, --sprice_t\t\tprice tick\n"
+		  "\t-sm, --smultiple\tmultiple\n"
+		  "\t-st, --spricet\t\tprice tick\n"
+		  "\t-ss, --ssignal\t\tsignal multipler\n\n"
 
-           "fm2trader:\t\t-- Femas2.0 Trader app --\n"
-          "\t-tf, --tfront\t\tset front address\n"
-          "\t-tu, --tuser\t\tset user id \n"
-          "\t-tp, --tpassword\t\tset password\n"
-          "\t-tb, --tbroker\t\tset borker id\n"
-          "\t-te, --texchange\t\tset exchange id\n"
-          "\t-ts, --threshold\t\tset extra flatten threshold"
+          "\t-ts, --threshold\tset extra flatten threshold"
            "\n"
            );
 }
@@ -618,6 +656,15 @@ int hs_get_file_list( string path, vector<string> &pcap_file_list )
 			t_path.append(ptr->d_name);
 			pcap_file_list.push_back(t_path);
 			count++;
+		}
+		else if( strncmp(ptr->d_name,"package", 7) == 0 )
+		{
+                        string t_path = path;
+                        t_path.append("/");
+                        t_path.append(ptr->d_name);
+                        pcap_file_list.push_back(t_path);
+                        count++;
+
 		}
 		else if(ptr->d_type == 4) //dir
 		{
@@ -712,14 +759,45 @@ int hs_load_file( string filename, vector<P_HS_MD_T> &pcap_md_list )
 
 }
 
+int hs_wirte_log( string filename, int check_write )
+{
+	static FILE * pf = NULL;
+	if( check_write )
+	{
+		if( signal_log_line < 100 && signal_log_pos < 60000 )
+		{
+			return 0;
+		}
+	}
+
+	if( NULL == pf )
+	{
+		if( (pf = fopen( filename.c_str(), "w+" )) == NULL )
+		{
+			printf("fopen %s error !", filename.c_str());
+		}
+	}
+	//printf("===== write[%d] pos:%d - line:%d =====\n", check_write, signal_log_pos, signal_log_line);
+	int count = fwrite(signal_log_buffer, 1, strlen(signal_log_buffer), pf);
+	signal_log_line = 0;
+	signal_log_pos = 0;
+
+	if( !check_write )
+	{
+		fclose(pf);
+		pf = NULL;
+	}
+	return count;	
+}
+
 int hs_write_result( string filename )
 {
 	FILE * pf;
+
 	if( (pf = fopen( filename.c_str(), "w+" )) == NULL )
 	{
 		printf("fopen %s error !", filename.c_str());
 	}
-
 	int count = fwrite(log_buffer, 1, strlen(log_buffer), pf);
 	fclose(pf);
 	return count;
@@ -728,9 +806,9 @@ int hs_write_result( string filename )
 int hs_write_stastic()
 {
 	FILE * pf;
-	if( (pf = fopen( "./log_result/policy_stastic.csv", "w+" )) == NULL )
+	if( (pf = fopen( "./log_result/strategy_stastic.csv", "w+" )) == NULL )
 	{
-		printf("fopen %s error !", "./log_result/policy_stastic.csv");
+		printf("fopen %s error !", "./log_result/strategy_stastic.csv");
 	}
 
 	int count = fwrite(stastic_buffer, 1, strlen(stastic_buffer), pf);
@@ -758,6 +836,7 @@ double calc_result( vector<P_HS_MD_T> pcap_md_list )
 	{
 		P_HS_MD_T ptr_md_data = (*it);
 		int ret_flag = 1;
+		//printf("== %s ==\n", ptr_md_data->hs_head.m_symbol);
 		if(strcmp(ptr_md_data->hs_head.m_symbol, trading_instrument) == 0)
 		{
 			ret_flag = 0;
@@ -780,7 +859,14 @@ double calc_result( vector<P_HS_MD_T> pcap_md_list )
 			ptr_md_data = NULL;
 			continue;
 		}
-
+/*
+		printf("-|||=== md_func get instrument: %s, flag:%d\n", ptr_md_data->hs_head.m_symbol, ptr_md_data->hs_head.m_quote_flag);
+		printf("-|||=== time: %s.%d\n", ptr_md_data->hs_head.m_update_time, ptr_md_data->hs_head.m_millisecond);
+		printf("||||||=== bid: %f - volume:%d\n",ptr_md_data->hs_body.hs_md_nor.m_bid_px, ptr_md_data->hs_body.hs_md_nor.m_bid_share);
+		printf("||||||=== ask: %f - volume:%d\n",ptr_md_data->hs_body.hs_md_nor.m_ask_px, ptr_md_data->hs_body.hs_md_nor.m_ask_share);
+		printf("||||||=== last: %f - volume:%d\n",ptr_md_data->hs_body.hs_md_nor.m_last_px, ptr_md_data->hs_body.hs_md_nor.m_last_share);
+		printf("||||||=== value:%f - pos: %d\n", ptr_md_data->hs_body.hs_md_nor.m_total_value, ptr_md_data->hs_body.hs_md_nor.m_total_pos);	
+*/
 		P_HS_MD_T ptr_valid_data = g_valid_md[string(ptr_md_data->hs_head.m_symbol)];
 		memcpy( &ptr_valid_data->hs_head, &ptr_md_data->hs_head, sizeof(struct guava_udp_head));
 		switch( ptr_valid_data->hs_head.m_quote_flag)
@@ -819,8 +905,8 @@ double calc_result( vector<P_HS_MD_T> pcap_md_list )
 			}
 
 		}
-
 		PNL += md_func( ptr_valid_data->hs_head.m_symbol, (void *)ptr_valid_data, sizeof(HS_MD_T));
+		hs_wirte_log( log_file_name, 1 );
 		//printf("=total PNL=%f=\n", PNL);
 
 		delete ptr_md_data;
@@ -1033,10 +1119,10 @@ static inline void guava_md(int mc_port, const char *mc_group, const char *mc_bi
         int n_rcved = -1;
         n_rcved = recvfrom(m_sock, line, receive_buf_size, 0, (struct sockaddr*)&muticast_addr, &len);
 
-        //检测线程退出信号
+        //检测线程退出信�?
         if (g_guava_quit_flag == 1)
         {
-            //此时已关闭完所有的客户端
+            //此时已关闭完所有的客户�?
             return;
         }
 

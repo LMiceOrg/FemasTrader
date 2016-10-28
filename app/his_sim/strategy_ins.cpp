@@ -116,16 +116,15 @@ double deal_order( char *order_time, int order_msec )
 		}
 		PNL = money - fee;
 	}
-
-	//printf("==buy:%d=sell:%d==\n", g_cur_st->m_pos.m_buy_pos, g_cur_st->m_pos.m_sell_pos);
-
-
 	sprintf( log_buffer+log_pos , "%s,%s.%03d,%c,%c,%f,%d,%f,%f\n",g_order.InstrumentID, order_time, order_msec, 
 																g_order.Direction, g_order.OffsetFlag, 
 																g_order.LimitPrice, g_order.Volume, 
 																money, fee);
 	log_pos = strlen(log_buffer);
 	//printf("==deal_order=%f=\n", PNL);
+	session_fee += fee;
+	session_trading_times++;
+
 	return PNL;
 
 }
@@ -140,11 +139,12 @@ double md_func(const char* symbol, const void* addr, int size)
     guava_udp_head *ptr_head = (guava_udp_head*)addr;
 	guava_udp_normal *ptr_data = NULL;
 	double PNL = 0;
-	int flag = 0;
+	static int flag = 0;
 
 	//in case message less then flag2 condition
 	if( size == 0 )
 	{
+		//printf("=== last flatten ===\n");
 		ptr_data = (guava_udp_normal*)(addr + sizeof(guava_udp_head));
 		//printf("g_cur_st->m_pos.m_sell_pos:%d\n", g_cur_st->m_pos.m_sell_pos);
 		if( g_cur_st->m_pos.m_sell_pos > 0 )
@@ -164,6 +164,7 @@ double md_func(const char* symbol, const void* addr, int size)
 			g_order.OffsetFlag = USTP_FTDC_OF_CloseToday;
 			PNL += deal_order( ptr_head->m_update_time, ptr_head->m_millisecond );
 		}
+		flag = 0;
 		return PNL;
 	}
 
@@ -175,6 +176,7 @@ double md_func(const char* symbol, const void* addr, int size)
 	{
 		return 0;
 	}
+
 
     if( 1 != g_ins->get_pause_status() ) 
 	{
@@ -218,7 +220,83 @@ double md_func(const char* symbol, const void* addr, int size)
 
 	        fc->update(msg_data);
 	        double signal = fc->get_forecast();
-			signal/=1.21;
+
+
+			/** record signal detail to signal file - start */
+			int size = 0;
+			#define TMP_ARR_SIZE 128
+			static double arr_signal[TMP_ARR_SIZE];
+			memset( arr_signal, 0, TMP_ARR_SIZE*sizeof(double) );
+
+			double *ptr_array = arr_signal;
+			fc->get_all_signal( &ptr_array, &size);
+			
+			int64_t systime_fc = 0;
+			get_system_time(&systime_fc);
+			
+			EalBson bson_text, bson_msg, bson_fc;
+			bson_msg.AppendInt64("recv_local_time:", msg_data.get_time());
+			bson_msg.AppendSymbol("m_recv_UpdateTime:", ptr_head->m_update_time);
+			bson_msg.AppendInt32("m_recv_UpdateMillisec", ptr_head->m_millisecond);
+			bson_msg.AppendSymbol("m_inst", msg_data.get_inst().c_str());
+			bson_msg.AppendInt64("m_time_micro", msg_data.get_time());
+			bson_msg.AppendDouble("m_cur_price", ptr_data->m_last_px);
+			bson_msg.AppendDouble("m_offer", msg_data.get_offer());
+			bson_msg.AppendInt32("m_offer_quantity", msg_data.get_offer_quantity());
+			bson_msg.AppendDouble("m_bid", msg_data.get_bid());
+			bson_msg.AppendInt32("m_bidr_quantity", msg_data.get_bid_quantity());
+			bson_msg.AppendInt32("m_volume", msg_data.get_volume());
+			bson_msg.AppendDouble("m_notional", msg_data.get_notional());
+			bson_msg.AppendDouble("m_limit_down", msg_data.get_limit_down());
+			bson_msg.AppendDouble("m_limit_up", msg_data.get_limit_up());
+			
+			bson_fc.AppendInt64("forecaster time", systime_fc/10);
+			bson_fc.AppendDouble("final_signal", signal);
+			if( 0 == strcmp( ptr_head->m_symbol, g_cur_st->m_ins_name) )
+			{
+				double mid = 0.5 * ( ptr_data->m_ask_px + ptr_data->m_bid_px );
+				double forecast = mid * ( 1 + signal * g_signal_multiplier );
+				bson_fc.AppendDouble("forecaster", forecast);
+			}
+			else
+			{
+				bson_fc.AppendDouble("forecaster", 0);
+			}
+
+			int iter;
+			for( iter=0; iter<size; iter++ )
+			{
+				bson_fc.AppendDouble( array_feature_name[iter].c_str(), arr_signal[iter]);
+			}
+			
+		/*	
+			bson_fc.AppendDouble("ChinaL1DiscreteSelfDecayingReturnFeature_1", arr_signal[0]);
+			bson_fc.AppendDouble("ChinaL1DiscreteSelfDecayingReturnFeature_2", arr_signal[1]);
+			bson_fc.AppendDouble("ChinaL1DiscreteSelfBookImbalanceFeature", arr_signal[2]);
+			bson_fc.AppendDouble("ChinaL1DiscreteSelfTradeImbalanceFeatureV2", arr_signal[3]);
+			bson_fc.AppendDouble("ChinaL1DiscreteOtherBestSinceFeature_rb00_1", arr_signal[4]);
+			bson_fc.AppendDouble("ChinaL1DiscreteOtherBestSinceFeature_rb00_2", arr_signal[5]);
+			bson_fc.AppendDouble("ChinaL1DiscreteOtherDecayingReturnFeature_rb00_1", arr_signal[6]);
+			bson_fc.AppendDouble("ChinaL1DiscreteOtherDecayingReturnFeature_rb00_2", arr_signal[7]);
+			bson_fc.AppendDouble("ChinaL1DiscreteOtherBookImbalanceFeature_rb00", arr_signal[8]);
+			bson_fc.AppendDouble("ChinaL1DiscreteOtherTradeImbalanceFeatureV2_rb00_1", arr_signal[9]);
+			bson_fc.AppendDouble("ChinaL1DiscreteOtherTradeImbalanceFeatureV2_rb00_2", arr_signal[10]);
+		*/
+
+
+			
+			bson_text.AppendDocument( "md_msg", &bson_msg );
+			bson_text.AppendDocument( "fc_msg", &bson_fc );
+			
+			const char *strJson = bson_text.GetJsonData();
+			sprintf(signal_log_buffer+signal_log_pos,"%s\n", strJson);
+			signal_log_pos = strlen(signal_log_buffer);
+			signal_log_line++;
+			bson_text.FreeJsonData();
+
+			/** record signal detail to signal file - end */
+			
+			//signal/=1.21;
 	        double forecast = 0;	
 			int left_pos_size = 0;
 
@@ -234,14 +312,14 @@ double md_func(const char* symbol, const void* addr, int size)
 					flag = 1;
 				}
 			}
-
+/*
 			if( (t.tm_hour == 11 && t.tm_min == 24 && t.tm_sec >= 55 ) ||
 				( t.tm_hour == 14 && t.tm_min >= 54 && t.tm_sec >= 55 ) ||
 				( t.tm_hour == 22 && t.tm_min >= 54 && t.tm_sec >= 55 )
 			  )
 			{
 				flag = 2;
-			}
+			}*/
 
 			if( (t.tm_hour == 11 && t.tm_min >= 28) ||
 				( t.tm_hour == 14 && t.tm_min >= 58 ) ||
@@ -251,7 +329,13 @@ double md_func(const char* symbol, const void* addr, int size)
 			//	printf("=======flag 1========\n");
 				flag = 2;
 			}
-
+/*
+			printf("-|||=== md_func msg_dt\n");
+			printf("||||||=== bid: %f - volume:%d\n",msg_dt.m_bid, msg_dt.m_bid_quantity);
+			printf("||||||=== ask: %f - volume:%d\n",msg_dt.m_offer, msg_dt.m_offer_quantity);
+			printf("||||||=== last: %f - volume:%d\n",ptr_data->m_last_px, msg_dt.m_volume);
+			printf("||||||=== value:%f - pos: %d\n", msg_dt.m_notional, ptr_data->m_total_pos); 
+*/
 
 			if( 0 == strcmp( ptr_head->m_symbol, trading_instrument) )
 			{
@@ -261,7 +345,8 @@ double md_func(const char* symbol, const void* addr, int size)
 				//price check,to be add		
 
 				double mid = 0.5 * ( ptr_data->m_bid_px + ptr_data->m_ask_px );
-	            forecast = mid * ( 1 + signal );
+	            forecast = mid * ( 1 + signal * g_signal_multiplier );
+				//printf("||||||=== forecaster:%f\n\n\n\n", forecast); 
 /*
 				printf("-|||=== md_func get instrument: %s, flag:%d\n", symbol, ptr_head->m_quote_flag);
 				printf("-|||=== time: %s.%d\n", ptr_head->m_update_time, ptr_head->m_millisecond);
@@ -273,6 +358,7 @@ double md_func(const char* symbol, const void* addr, int size)
 */				
 				if( flag == 0 )
 				{
+					//printf("===flag 0===\n");
 					if( forecast > ptr_data->m_ask_px )
 					{
 						//printf("=== pos === buy:%d - sell:%d\n", g_cur_st->m_pos.m_buy_pos, g_cur_st->m_pos.m_sell_pos);
@@ -328,6 +414,7 @@ double md_func(const char* symbol, const void* addr, int size)
 
 				else if( flag == 1 )
 				{
+					//printf("===flag 1===\n");
 					if( forecast > ptr_data->m_ask_px )
 					{
 						if( g_cur_st->m_pos.m_sell_pos > 0 )
@@ -336,9 +423,8 @@ double md_func(const char* symbol, const void* addr, int size)
 							g_order.LimitPrice = ptr_data->m_ask_px;
 							g_order.Direction = USTP_FTDC_D_Buy;
 							g_order.OffsetFlag = USTP_FTDC_OF_CloseToday;
+							PNL = deal_order( ptr_head->m_update_time, ptr_head->m_millisecond );
 						}
-
-						PNL = deal_order( ptr_head->m_update_time, ptr_head->m_millisecond );
 					}
 					
 					if( forecast < ptr_data->m_bid_px )
@@ -349,13 +435,13 @@ double md_func(const char* symbol, const void* addr, int size)
 							g_order.LimitPrice = ptr_data->m_bid_px;
 							g_order.Direction = USTP_FTDC_D_Sell;
 							g_order.OffsetFlag = USTP_FTDC_OF_CloseToday;
-						}
-						PNL = deal_order( ptr_head->m_update_time, ptr_head->m_millisecond );
+							PNL = deal_order( ptr_head->m_update_time, ptr_head->m_millisecond );
+						}	
 					}
 				}
 				else
 				{
-
+					//printf("===flag 2===\n");
 					//printf("g_cur_st->m_pos.m_sell_pos:%d\n", g_cur_st->m_pos.m_sell_pos);
 					if( g_cur_st->m_pos.m_sell_pos > 0 )
 					{
@@ -376,6 +462,10 @@ double md_func(const char* symbol, const void* addr, int size)
 					}
 				}
 
+			}
+			else
+			{
+				//printf("\n\n\n\n");
 			}
         }
     }
@@ -447,12 +537,14 @@ void status_func(const char* symbol, const void* addr, int size)
 
 //class function
 
-strategy_ins::strategy_ins(STRATEGY_CONF_P ptr_conf , CLMSpi *spi):m_exit_flag(0),m_pause_flag(0)
+strategy_ins::strategy_ins(const char *model_name, STRATEGY_CONF_P ptr_conf , CLMSpi *spi):m_exit_flag(0),m_pause_flag(0)
 {
-    lmice_info_print("model name: %s\nmax positon: %d\nmax loss: %lf\nclose value: %lf\n",
+    lmice_info_print("model name: %s\nmax positon: %d\nmax loss: %lf\nclose value: %lf\nprice tick:%lf\nfee rate:%lf\n",
                      g_conf->m_model_name, g_conf->m_max_pos,
-                     g_conf->m_max_loss, g_conf->m_close_value);
+                     g_conf->m_max_loss, g_conf->m_close_value,
+                     g_cur_status.m_md.m_price_tick, g_cur_status.m_md.fee_rate);
     m_strategy = spi;
+	m_model_name = model_name;
     //m_status = new CUR_STATUS;
     //memset(m_status, 0, sizeof(CUR_STATUS));
     //memset( m_spi_symbol, 0, sizeof(m_spi_symbol));
@@ -472,7 +564,9 @@ strategy_ins::~strategy_ins()
 
 void strategy_ins::init()
 {	
-    string type = "hc_0";
+    //string type = "hc_0";
+    string type = m_model_name;
+    //string type = "rb_0";
     //time_t current;
     //current = time(NULL);
     //struct tm date = *localtime(&current);

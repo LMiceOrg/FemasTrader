@@ -37,7 +37,7 @@ void status_func(const char* symbol, const void* addr, int size);
 class strategy_ins
 {
 public:
-    strategy_ins( STRATEGY_CONF_P ptr_conf, CLMSpi *spi );
+    strategy_ins( const char *model_name, STRATEGY_CONF_P ptr_conf, CLMSpi *spi );
 	~strategy_ins();
 
 public:	
@@ -79,7 +79,7 @@ private:
 	CLMSpi *m_strategy;
 	int m_exit_flag;
 	int m_pause_flag;
-	
+	const char* m_model_name;
 #ifdef USE_CPLUS_LIB
 	Forecaster *m_forecaster;
 #endif

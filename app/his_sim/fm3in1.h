@@ -7,6 +7,8 @@
 #include "fm2spi.h"
 #include "lmice_eal_thread.h"
 #include "ChinaL1DiscreteFeature.h"
+#include <string>
+#include <vector>
 
 typedef struct strategy_conf{
     char m_model_name[MODEL_NAME_SIZE];
@@ -54,6 +56,14 @@ extern char log_buffer[];
 extern int log_pos;
 extern char stastic_buffer[];
 extern int stastic_pos;
+extern char signal_log_buffer[];
+extern int signal_log_pos;
+extern int signal_log_line;
 
+extern double session_fee;
+extern int session_trading_times;
+extern double g_signal_multiplier;
 
+extern std::vector<std::string> array_feature_name;
+	
 #endif // FM3IN1_H
