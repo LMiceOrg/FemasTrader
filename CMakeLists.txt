@@ -247,6 +247,16 @@ target_link_libraries(fm3in1 model_static eal_static pthread rt ${femas_libs} pc
 add_dependencies(fm3in1 model_static)
 add_dependencies(fm3in1 eal_static)
 
+#Femas2.0 Trader, NetMD, strategy 3in1 for HT guava
+LIST(APPEND fm3in1_ht_src app/fm3in1_ht/netmd.cpp
+    app/fm3in1_ht/fm2spi.cpp
+    app/fm3in1_ht/strategy_ins.cpp
+)
+add_executable(fm3in1_ht ${fm3in1_ht_src})
+
+target_link_libraries(fm3in1_ht model_static eal_static pthread rt ${femas_libs} pcap ${fc_libs})
+add_dependencies(fm3in1_ht model_static)
+
 #histroy simulator 
 LIST(APPEND his_sim_src app/his_sim/netmd.cpp
     app/his_sim/fm2spi.cpp
