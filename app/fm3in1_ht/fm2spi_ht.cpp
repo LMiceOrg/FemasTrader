@@ -1,4 +1,4 @@
-#include "fm2spi.h"
+#include "fm2spi_ht.h"
 #include "lmice_trace.h"
 
 #include <string.h>
@@ -9,16 +9,17 @@
 #include <signal.h>
 #include <sys/time.h> 
 
-#include "fm3in1.h"
+#include "fm3in1_ht.h"
 
 
-static char g_order_status;
-static char g_order_sys_id[32];
+//static char g_order_status;
+//static char g_order_sys_id[32];
+#define MACRO_STR(s) s
 #define UPDATE_LOCALID(local_id, sname, pname) do {\
     int id= local_id;   \
     int i;  \
     for(i=0;i<12;++i) {\
-        sname.pname[11-i]='0'+(id%10);  \
+        MACRO_STR(sname).MACRO_STR(pname)[11-i]='0'+(id%10);  \
         id = id / 10;   \
     }\
     }while(0)
@@ -34,6 +35,11 @@ static char g_order_sys_id[32];
 
 
 ///< Utilities
+static void order_action_func(int sig) {
+    (void)sig;
+    *g_orderaction_flag = 1;
+}
+
 forceinline void login(CFemas2TraderSpi* spi)
 {
     CUstpFtdcReqUserLoginField req;
@@ -54,6 +60,8 @@ forceinline void logout(CFemas2TraderSpi* spi) {
 }
 
 forceinline void orderinsert(CFemas2TraderSpi* spi, CUstpFtdcInputOrderField* preq) {
+    fm3_args_t& args = spi->fm3_args();
+    CUstpFtdcInputOrderField&    g_order=args.order;
     int local_id = spi->req_id();
     update_localid(local_id);
 //    CUstpFtdcInputOrderField& req = *preq;
@@ -96,12 +104,15 @@ forceinline void orderinsert(CFemas2TraderSpi* spi, CUstpFtdcInputOrderField* pr
 
 forceinline void orderaction(CFemas2TraderSpi* spi, CUstpFtdcOrderActionField* preq) 
 {
+    fm3_args_t& args = spi->fm3_args();
+    int64_t&g_end_time = args.end_time;
+    CUstpFtdcOrderActionField &g_order_action = args.order_action;
 
 	int local_id = g_spi->current_id();
     update_order_localid(local_id);
 	local_id = g_spi->req_id();
 	update_order_action_localid(local_id);
-	strcpy( g_order_action.OrderSysID, g_cur_sysid );
+    //strcpy( g_order_action.OrderSysID, g_cur_sysid );
 	spi->trader()->ReqOrderAction( &g_order_action, local_id );
 	
 	int64_t systime = 0;
@@ -142,6 +153,10 @@ forceinline void investorposition(CFemas2TraderSpi* spi)
 
 forceinline void hard_flatten(CFemas2TraderSpi* spi)
 {
+    fm3_args_t& args = spi->fm3_args();
+    CUstpFtdcInputOrderField    &g_order = args.order;
+    CUR_STATUS_P g_cur_st = &args.cur_status;
+
 	if( g_cur_st->m_pos.m_buy_pos > 0 )
 	{
 		g_order.Volume = g_cur_st->m_pos.m_buy_pos;
@@ -164,6 +179,9 @@ forceinline void hard_flatten(CFemas2TraderSpi* spi)
 
 forceinline void soft_flatten(CFemas2TraderSpi* spi)
 {
+    fm3_args_t& args = spi->fm3_args();
+    CUstpFtdcInputOrderField    &g_order = args.order;
+    CUR_STATUS_P g_cur_st = &args.cur_status;
 
     if( g_cur_st->m_pos.m_buy_pos == g_cur_st->m_pos.m_sell_pos )
 	{
@@ -189,8 +207,23 @@ forceinline void soft_flatten(CFemas2TraderSpi* spi)
 }
 
 
-CFemas2TraderSpi::CFemas2TraderSpi(CUstpFtdcTraderApi *pt, const char *name)
-    :CLMSpi(name, 0)
+CFemas2TraderSpi::CFemas2TraderSpi(CUstpFtdcTraderApi *pt, const char *name, fm3_args_t &a)
+    :CLMSpi(name, 0),
+      args(a),
+      g_order_action(a.order_action),
+      g_order(a.order),
+      g_cur_status(a.cur_status),
+
+      g_cur_st(&a.cur_status),
+      g_conf(&a.st_conf),
+      g_account_id(a.config.account_id),
+      g_done_flag(a.cur_status.done_flag),
+      g_begin_time(a.begin_time),
+      g_end_time(a.end_time),
+
+      g_active_buy_orders(a.cur_status.active_buy_orders),
+      g_active_sell_orders(a.cur_status.active_sell_orders),
+      g_cur_sysid(a.cur_sysid)
 {
     m_trader= pt;
     m_curid = 0;
@@ -218,69 +251,74 @@ int CFemas2TraderSpi::current_id() const
     return m_curid;
 }
 
-CUstpFtdcTraderApi* CFemas2TraderSpi::trader() const {
-    return m_trader;
-}
+//CUstpFtdcTraderApi* CFemas2TraderSpi::trader() const {
+//    return m_trader;
+//}
 
-EFEMAS2TRADER CFemas2TraderSpi::status() const
-{
-    return m_state;
-}
+//fm3_args_t &CFemas2TraderSpi::fm3_args()
+//{
+//    return args;
+//}
 
-const char* CFemas2TraderSpi::user_id() const {
-    return m_user_id;
-}
+//EFEMAS2TRADER CFemas2TraderSpi::status() const
+//{
+//    return m_state;
+//}
 
-const char* CFemas2TraderSpi::password() const {
-    return m_password;
-}
+//inline const char* CFemas2TraderSpi::user_id() const {
+//    return m_user_id;
+//}
 
-const char* CFemas2TraderSpi::broker_id() const {
-    return m_broker_id;
-}
-const char* CFemas2TraderSpi::front_address() const {
-    return m_front_address;
-}
+//const char* CFemas2TraderSpi::password() const {
+//    return m_password;
+//}
 
-const char* CFemas2TraderSpi::investor_id() const {
-    return m_investor_id;
-}
-const char* CFemas2TraderSpi::model_name() const {
-    return m_model_name;
-}
+//const char* CFemas2TraderSpi::broker_id() const {
+//    return m_broker_id;
+//}
+//const char* CFemas2TraderSpi::front_address() const {
+//    return m_front_address;
+//}
 
-const char *CFemas2TraderSpi::exchange_id() const
-{
-    return m_exchange_id;
-}
-void CFemas2TraderSpi::user_id(const char* id) {
-    m_user_id = id;
-}
+//const char* CFemas2TraderSpi::investor_id() const {
+//    return m_investor_id;
+//}
+//const char* CFemas2TraderSpi::model_name() const {
+//    return m_model_name;
+//}
 
-void CFemas2TraderSpi::password(const char* id) {
-    m_password = id;
-}
+//const char *CFemas2TraderSpi::exchange_id() const
+//{
+//    return m_exchange_id;
+//}
+//void CFemas2TraderSpi::user_id(const char* id) {
+//    m_user_id = id;
+//}
 
-void CFemas2TraderSpi::broker_id(const char* id) {
-    m_broker_id = id;
-}
+//void CFemas2TraderSpi::password(const char* id) {
+//    m_password = id;
+//}
 
-void CFemas2TraderSpi::front_address(const char* id) {
-    m_front_address = id;
-}
+//void CFemas2TraderSpi::broker_id(const char* id) {
+//    m_broker_id = id;
+//}
 
-void CFemas2TraderSpi::investor_id(const char* id) {
-    m_investor_id = id;
-}
+//void CFemas2TraderSpi::front_address(const char* id) {
+//    m_front_address = id;
+//}
 
-void CFemas2TraderSpi::model_name(const char* id) {
-    m_model_name = id;
-}
+//void CFemas2TraderSpi::investor_id(const char* id) {
+//    m_investor_id = id;
+//}
 
-void CFemas2TraderSpi::exchange_id(const char *id)
-{
-    m_exchange_id = id;
-}
+//void CFemas2TraderSpi::model_name(const char* id) {
+//    m_model_name = id;
+//}
+
+//void CFemas2TraderSpi::exchange_id(const char *id)
+//{
+//    m_exchange_id = id;
+//}
 
 
 
@@ -293,6 +331,11 @@ void CFemas2TraderSpi::exchange_id(const char *id)
     //[modelname]-req-flatten
 int CFemas2TraderSpi::init_trader() {
 
+}
+
+void CFemas2TraderSpi::order_action()
+{
+    orderaction( this, &g_order_action);
 }
 
 void CFemas2TraderSpi::order_insert(const char *symbol, const void *addr, int size)
@@ -373,6 +416,8 @@ void CFemas2TraderSpi::OnRspUserLogin(CUstpFtdcRspUserLoginField *pRspUserLogin,
         m_state = FMTRADER_CONNECTED;
         return;
     }
+    int& g_account_id = args.config.account_id;
+    char* trading_instrument = args.config.trading_instrument;
 
     m_curid = (atoi(pRspUserLogin->MaxOrderLocalID)%FM_LOCALID_MULTIPLE) + 1 + (g_account_id * FM_LOCALID_MULTIPLE);
     m_state = FMTRADER_LOGIN;
@@ -533,26 +578,7 @@ void CFemas2TraderSpi::OnRspQryInvestorPosition(CUstpFtdcRspInvestorPositionFiel
 	
 }
 
-/// time func
-void order_action_func(int signo)
-{
-//	if( g_order_status != '0' && g_order_status != '5')
-//	if( g_order_status != '0' )
-	{
-		orderaction( g_spi, &g_order_action);
-		g_order_action_count++;
-	}
-}
 
-/// cannel timer 
-void uninit_time() 
-{ 
-    struct itimerval value; 
-    value.it_value.tv_sec = 0; 
-    value.it_value.tv_usec = 0; 
-    value.it_interval = value.it_value; 
-    setitimer(ITIMER_REAL, &value, NULL); 
-} 
 
 
 void CFemas2TraderSpi::OnRspOrderInsert(CUstpFtdcInputOrderField *pInputOrder, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
@@ -568,7 +594,7 @@ void CFemas2TraderSpi::OnRspOrderInsert(CUstpFtdcInputOrderField *pInputOrder, C
 	
 	printf(" === order insert	msg ===\n OrderSysID=%s\t UserOrderLocalID=%s\n\n ", pInputOrder->OrderSysID,  pInputOrder->UserOrderLocalID );
 	
-	strcpy(g_order_sys_id, pInputOrder->OrderSysID);
+    //strcpy(g_order_sys_id, pInputOrder->OrderSysID);
 
     if (pInputOrder==NULL )
     {
@@ -722,7 +748,7 @@ void CFemas2TraderSpi::OnRtnTrade(CUstpFtdcTradeField *pTrade)
     if( update_flag )
     {
         int left_pos = g_cur_st->m_pos.m_buy_pos - g_cur_st->m_pos.m_sell_pos;
-        double fee =  fabs(left_pos) * g_cur_st->m_md.m_multiple * g_cur_st->m_md.m_last_price * g_cur_st->m_md.fee_rate;
+        double fee =  abs(left_pos) * g_cur_st->m_md.m_multiple * g_cur_st->m_md.m_last_price * g_cur_st->m_md.fee_rate;
         double pl = g_cur_st->m_acc.m_left_cash + left_pos * g_cur_st->m_md.m_multiple * g_cur_st->m_md.m_last_price - fee;
 
         if( -pl >= g_conf->m_max_loss )
@@ -735,7 +761,7 @@ void CFemas2TraderSpi::OnRtnTrade(CUstpFtdcTradeField *pTrade)
 
 }
 
-static int64_t g_beg_time = 0;
+
 void CFemas2TraderSpi::OnRtnOrder(CUstpFtdcOrderField *pOrder)
 {
 	int64_t systime = 0;
@@ -761,9 +787,9 @@ void CFemas2TraderSpi::OnRtnOrder(CUstpFtdcOrderField *pOrder)
 	lmice_info_print("OnRtnOrder from %s\n", g_order_sys_id);
 */
 
-	if( g_beg_time > 0 )
+    if( g_begin_time > 0 )
 	{
-		printf("\t === order rtn msg === deal time: %ld\n", g_end_time - g_beg_time);
+        printf("\t === order rtn msg === deal time: %lld\n", g_end_time - g_begin_time);
 	}
 
 	if( pOrder->OrderStatus != USTP_FTDC_OS_Canceled )
@@ -776,13 +802,12 @@ void CFemas2TraderSpi::OnRtnOrder(CUstpFtdcOrderField *pOrder)
 		{
 			g_active_sell_orders = pOrder->VolumeRemain;
 		}
-		g_order_status = pOrder->OrderStatus;
-		g_order_direction = pOrder->Direction;
+        //g_order_status = pOrder->OrderStatus;
 		
-		printf(" === order rtn	msg ===\n OrderSysID=%s\t UserOrderLocalID=%s OrderStatus=%c \n timer time= %ld\n g_order_direction:%c\tg_active_buy_orders:%d\tg_active_sell_orders=%d\n\n ",
+        printf(" === order rtn	msg ===\n OrderSysID=%s\t UserOrderLocalID=%s OrderStatus=%c \n timer time= %lld\n g_order_direction:%c\tg_active_buy_orders:%d\tg_active_sell_orders=%d\n\n ",
 			 pOrder->OrderSysID,  pOrder->UserOrderLocalID, pOrder->OrderStatus,
 			 g_end_time,
-			 g_order_direction, g_active_buy_orders, g_active_sell_orders);
+             pOrder->Direction, g_active_buy_orders, g_active_sell_orders);
 
 		g_begin_time = 0;
 		if( pOrder->OrderStatus != USTP_FTDC_OS_AllTraded )
@@ -790,12 +815,13 @@ void CFemas2TraderSpi::OnRtnOrder(CUstpFtdcOrderField *pOrder)
 			/** set timer */
 			printf(" === OnRtnOrder insert - set action timer === \n\n");
 			signal(SIGALRM, order_action_func);
-			get_system_time(&g_beg_time);
+            get_system_time(&g_begin_time);
 			value.it_value.tv_sec = 0; 
 		    	value.it_value.tv_usec = 0; 
 		   	value.it_interval = value.it_value; 
 		    	setitimer(ITIMER_REAL, &value, NULL); 
-			if(setitimer(ITIMER_REAL, &g_tick, NULL) < 0)
+        value.it_value.tv_sec=5;
+            if(setitimer(ITIMER_REAL, &value, NULL) < 0)
 			{
 				lmice_error_print("Set timer failed!\n");
 			}
@@ -803,13 +829,13 @@ void CFemas2TraderSpi::OnRtnOrder(CUstpFtdcOrderField *pOrder)
 		}
 		else
 		{
-			g_beg_time = 0;
+            g_begin_time = 0;
 		}
 	
 	}
 	else
 	{
-		g_beg_time = 0;
+        g_begin_time = 0;
 		if( pOrder->Direction == USTP_FTDC_D_Buy )
 		{
 			g_active_buy_orders = 0;		
@@ -840,7 +866,7 @@ void CFemas2TraderSpi::OnRspQryInstrument(CUstpFtdcRspInstrumentField *p, CUstpF
     CUstpFtdcQryInvestorFeeField fee;
     strcpy(fee.BrokerID, broker_id());
     strcpy(fee.ExchangeID, exchange_id());
-    strcpy(fee.InstrumentID, trading_instrument);
+    strcpy(fee.InstrumentID, args.config.trading_instrument);
     strcpy(fee.InvestorID, investor_id());
     strcpy(fee.UserID, user_id());
     trader()->ReqQryInvestorFee(&fee, req_id());
@@ -849,17 +875,17 @@ void CFemas2TraderSpi::OnRspQryInstrument(CUstpFtdcRspInstrumentField *p, CUstpF
 
 void CFemas2TraderSpi::OnRspQryInvestorFee(CUstpFtdcInvestorFeeField *p, CUstpFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
 {
-    //  ///开仓手续费按比�?
+    //  ///开仓手续费按比��?
     //    TUstpFtdcRatioType	OpenFeeRate;
-    //	///开仓手续费按手�?
+    //	///开仓手续费按手��?
     //	TUstpFtdcRatioType	OpenFeeAmt;
     //	///平仓手续费按比例
     //	TUstpFtdcRatioType	OffsetFeeRate;
     //	///平仓手续费按手数
     //	TUstpFtdcRatioType	OffsetFeeAmt;
-    //	///平今仓手续费按比�?
+    //	///平今仓手续费按比��?
     //	TUstpFtdcRatioType	OTFeeRate;
-    //	///平今仓手续费按手�?
+    //	///平今仓手续费按手��?
     //	TUstpFtdcRatioType	OTFeeAmt;
     if( NULL == p )
     {

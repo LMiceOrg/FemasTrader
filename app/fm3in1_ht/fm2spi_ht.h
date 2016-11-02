@@ -5,6 +5,8 @@
 #include "USTPFtdcUserApiStruct.h"
 #include "strategy_status.h"
 
+#include "fm3in1_ht.h"
+
 enum EFEMAS2TRADER {
     FMTRADER_UNKNOWN=0,
     FMTRADER_CONNECTED,
@@ -31,7 +33,7 @@ typedef struct fm2_trader_account{
 class CFemas2TraderSpi: public CLMSpi,
         public CUstpFtdcTraderSpi {
 public:
-     CFemas2TraderSpi(CUstpFtdcTraderApi *pt, const char* name);
+     CFemas2TraderSpi(CUstpFtdcTraderApi *pt, const char* name, fm3_args_t& a);
     virtual ~CFemas2TraderSpi();
 
     ///< Get properties
@@ -40,26 +42,69 @@ public:
     //current request id
     int current_id() const;
     //trader
-    CUstpFtdcTraderApi* trader() const;
-	
-    EFEMAS2TRADER status() const;
-    const char* user_id() const;
-    const char* password() const;
-    const char* broker_id() const;
-    const char* front_address() const;
-    const char* investor_id() const;
-    const char* model_name() const;
-    const char* exchange_id() const;
-    void user_id(const char* id);
-    void password(const char* id);
-    void broker_id(const char* id);
-    void front_address(const char* id);
-    void investor_id(const char* id);
-    void model_name(const char* id);
-    void exchange_id(const char* id);
+    inline CUstpFtdcTraderApi* trader() const {
+        return m_trader;
+    }
+    inline fm3_args_t& fm3_args() {
+        return args;
+    }
+
+
+    inline EFEMAS2TRADER status() const {
+        return m_state;
+    }
+    inline const char* user_id() const {
+        return m_user_id;
+    }
+    inline const char* password() const {
+        return m_password;
+    }
+    inline const char* broker_id() const {
+        return m_broker_id;
+    }
+    inline const char* front_address() const {
+        return m_front_address;
+    }
+    inline const char* investor_id() const {
+        return m_investor_id;
+    }
+    inline const char* model_name() const {
+        return m_model_name;
+    }
+    inline const char* exchange_id() const {
+        return m_exchange_id;
+    }
+    inline void user_id(const char* id) {
+        m_user_id = id;
+    }
+
+    inline void password(const char* id) {
+        m_password = id;
+    }
+
+    inline void broker_id(const char* id) {
+        m_broker_id = id;
+    }
+
+    inline void front_address(const char* id) {
+        m_front_address = id;
+    }
+
+    inline void investor_id(const char* id) {
+        m_investor_id = id;
+    }
+
+    inline void model_name(const char* id) {
+        m_model_name = id;
+    }
+
+    inline void exchange_id(const char* id) {
+        m_exchange_id = id;
+    }
 
     ///<
     int init_trader();
+    void order_action();
     void order_insert(const char* symbol, const void* addr, int size);
 	void flatten_extra();
     void flatten_all(const char* symbol, const void* addr, int size);
@@ -111,6 +156,23 @@ private:
     int m_curid;
     EFEMAS2TRADER m_state;
 
+    fm3_args_t &args;
+    CUstpFtdcOrderActionField&   g_order_action;
+    CUstpFtdcInputOrderField&    g_order;
+    CUR_STATUS& g_cur_status;
+    CUR_STATUS_P g_cur_st;
+    STRATEGY_CONF_P g_conf;
+    int&g_account_id;
+    int &g_done_flag;
+
+    int64_t&g_begin_time;
+    int64_t&g_end_time;
+
+    int& g_active_buy_orders;
+    int& g_active_sell_orders;
+    char (&g_cur_sysid)[32];
+
+
     const char* m_user_id;
     const char* m_password;
     const char* m_broker_id;
@@ -118,6 +180,9 @@ private:
     const char* m_investor_id;
     const char* m_model_name;
     const char* m_exchange_id;
+
+    double g_trade_buy_price;
+    double g_trade_sell_price;
 
 	//current status
 	//double m_org_available;

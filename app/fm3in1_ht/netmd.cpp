@@ -464,8 +464,8 @@ int main(int argc, char* argv[]) {
 
     // 订阅私有�?
     //        TERT_RESTART:从本交易日开始重�?
-    //        TERT_RESUME:从上次收到的续传
-    //        TERT_QUICK:只传送登录后私有流的内容
+    //        TERT_RESUME:从上次收到的续� 
+    //        TERT_QUICK:只� 送登录后私有流的内容
     pt->SubscribePrivateTopic( USTP_TERT_QUICK );
     pt->SubscribePublicTopic ( USTP_TERT_QUICK );
 
@@ -529,7 +529,7 @@ int main(int argc, char* argv[]) {
         unit_test();
     } else {
     	sleep(3);
-	/** Run in main thread */
+    /** Run in main thread */
         //netmd_pcap_thread(devname, filter);
         guava_md(mc_port, mc_group, mc_bindip);
         /** flatten all */

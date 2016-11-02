@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 2.8)
 PROJECT(eal)
 
-set(CMAKE_VERBOSE_MAKEFILE on)
+set(CMAKE_VERBOSE_MAKEFILE off)
 
 
 IF( ${CMAKE_CXX_COMPILER} MATCHES  "[cg][+][+]")
     MESSAGE("G++ ")
     set(CMAKE_CXX_FLAGS "-Wall -std=c++11")
     set(CMAKE_CXX_FLAGS_DEBUG "-g3")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Os")
     set(CMAKE_C_FLAGS "-Wall ")
     set(CMAKE_C_FLAGS_DEBUG "-g3")
     add_definitions(-D_BSD_SOURCE)
@@ -26,7 +26,8 @@ INCLUDE_DIRECTORIES(.
     lib/libbson/include
     lib/libforecaster
     app/strategyht/
-    app/lmiced/)
+    app/lmiced/
+    app/fm3in1_ht/)
 
 FIND_LIBRARY(femas_libs NAMES USTPtraderapi
             	PATHS ${CMAKE_SOURCE_DIR}/lib/FemasAPIv2/linux64/lib)
@@ -267,3 +268,13 @@ add_executable(his_sim ${his_sim_src})
 target_link_libraries(his_sim model_static eal_static pthread rt ${femas_libs} pcap ${fc_libs})
 add_dependencies(his_sim model_static)
 add_dependencies(his_sim eal_static)
+
+
+#All In 1 HT
+LIST(APPEND all_ht_src app/fm3in1_ht/fm3in1_ht.cpp
+    app/fm3in1_ht/fm2spi_ht.cpp
+)
+add_executable(all_ht ${all_ht_src})
+target_link_libraries(all_ht model_static eal_static pthread rt ${femas_libs} ${fc_libs})
+add_dependencies(all_ht model_static)
+add_dependencies(all_ht eal_static)

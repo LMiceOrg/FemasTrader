@@ -25,60 +25,69 @@ typedef struct status_current_md{
 
 typedef struct current_status{
 	char m_ins_name[16];
+
+        int done_flag;    //ready OrderInsert
+        int flatten_flag;   //flatten
+        int active_buy_orders;
+        int active_sell_orders;
+
 	ST_POS m_pos;
 	ST_ACC m_acc;
 	ST_CUR_MD m_md;
 }CUR_STATUS,*CUR_STATUS_P;
 
+#define ORDER_READY 0
+#define ORDER_NOTREADY 1
+#define SESSION_OPEN 0
+#define SESSION_CLOSING 1
 
-
-#pragma pack(1)//Õâ¸ö²»ÄÜÉÙ£¬×Ö½Ú¶ÔÆë·½Ê½
+#pragma pack(1)//è¿™ä¸ªä¸èƒ½å°‘ï¼Œå­—èŠ‚å¯¹é½æ–¹å¼
 typedef struct MarketField
 {
-	int	   packetLen;//±¨ÎÄ³¤¶È 4	0
-	unsigned char versionNo;//°æ±¾ĞòºÅ	//	1	4
-	int	   updateTime;//ĞŞ¸ÄÊ±¼ä	//	4	5
-	char   exchangeID[3];//½»Ò×Ëù	//	3	9
-	char   instrumentID[30];//ºÏÔ¼´úÂë	//	30	12
-	bool   stopFlag;//Í£ÅÆ±êÊ¶	//	1	42
-	float  preSettlementPrice;//×ò½áËã¼Û	//	4	43
-	float  settlementPrice;//½ñ½áËã¼Û	//	4	47
-	float  averageMatchPrice;//³É½»¾ù¼Û	//	4	51
-	float  yesterdayClosePrice;//×òÊÕÅÌ	//	4	55
-	float  todayClosePrice;//½ñÊÕÅÌ	//	4	59
-	float  todayOpenPrice;//½ñ¿ªÅÌ	//	4	63
-	int	   yesterdayPositionAmount;//×ò³Ö²ÖÁ¿	//	4	67
-	int	   positionAmount;//³Ö²ÖÁ¿	//	4	71
-	float  latetestPrice;//×îĞÂ¼Û	//	4	75
-	int    macthAmount;//³É½»ÊıÁ¿	//	4	79
-	double macthTotalMoney;//³É½»½ğ¶î	//	8	83
-	float  highestPrice;//×î¸ß±¨¼Û	//	4	91
-	float  lowestPrice;//×îµÍ±¨¼Û	//	4	95
-	float  upperPrice;//ÕÇÍ£°å¼Û	//	4	99
-	float  lowerPrice;//µøÍ£°å¼Û	//	4	103
-	float  yesterdayImagineRealDegree;//×òĞéÊµ¶È	//	4	107
-	float  imagineRealDegree;//½ñĞéÊµ¶È	//	4	111
-	float  buyPrice1;//ÉêÂò¼Û1	//	4	115
-	float  sellPrice1;//ÉêÂô¼Û1	//	4	119
-	int	   buyAmount1;//ÉêÂòÁ¿1	//	4	123
-	int	   sellAmount1;//ÉêÂôÁ¿1	//	4	127
-	float  buyPrice2;//ÉêÂò¼Û2	//	4	131
-	float  sellPrice2;//ÉêÂô¼Û2	//	4	135
-	int    buyAmount2;//ÉêÂòÁ¿2	//	4	139
-	int    sellAmount2;//ÉêÂôÁ¿2	//	4	143
-	float  buyPrice3;//ÉêÂò¼Û3	//	4	147
-	float  sellPrice3;//ÉêÂô¼Û3	//	4	151
-	int	   buyAmount3;//ÉêÂòÁ¿3	//	4	155
-	int	   sellAmount3;//ÉêÂôÁ¿3	//	4	159
-	float  buyPrice4;//ÉêÂò¼Û4	//	4	163
-	float  sellPrice4;//ÉêÂô¼Û4	//	4	167
-	int	   buyAmount4;//ÉêÂòÁ¿4	//	4	171
-	int    sellAmount4;//ÉêÂôÁ¿4	//	4	175
-	float  buyPrice5;//ÉêÂò¼Û5	//	4	179
-	float  sellPrice5;//ÉêÂô¼Û5	//	4	183
-	int    buyAmount5;//ÉêÂòÁ¿5	//	4	187
-	int	   sellAmount5;//ÉêÂôÁ¿5	//	4	191
-	//ÎŞĞ§	ÎŞĞ§	//	61	195-255
+	int	   packetLen;//æŠ¥æ–‡é•¿åº¦ 4	0
+	unsigned char versionNo;//ç‰ˆæœ¬åºå·	//	1	4
+	int	   updateTime;//ä¿®æ”¹æ—¶é—´	//	4	5
+	char   exchangeID[3];//äº¤æ˜“æ‰€	//	3	9
+	char   instrumentID[30];//åˆçº¦ä»£ç 	//	30	12
+	bool   stopFlag;//åœç‰Œæ ‡è¯†	//	1	42
+	float  preSettlementPrice;//æ˜¨ç»“ç®—ä»·	//	4	43
+	float  settlementPrice;//ä»Šç»“ç®—ä»·	//	4	47
+	float  averageMatchPrice;//æˆäº¤å‡ä»·	//	4	51
+	float  yesterdayClosePrice;//æ˜¨æ”¶ç›˜	//	4	55
+	float  todayClosePrice;//ä»Šæ”¶ç›˜	//	4	59
+	float  todayOpenPrice;//ä»Šå¼€ç›˜	//	4	63
+	int	   yesterdayPositionAmount;//æ˜¨æŒä»“é‡	//	4	67
+	int	   positionAmount;//æŒä»“é‡	//	4	71
+	float  latetestPrice;//æœ€æ–°ä»·	//	4	75
+	int    macthAmount;//æˆäº¤æ•°é‡	//	4	79
+	double macthTotalMoney;//æˆäº¤é‡‘é¢	//	8	83
+	float  highestPrice;//æœ€é«˜æŠ¥ä»·	//	4	91
+	float  lowestPrice;//æœ€ä½æŠ¥ä»·	//	4	95
+	float  upperPrice;//æ¶¨åœæ¿ä»·	//	4	99
+	float  lowerPrice;//è·Œåœæ¿ä»·	//	4	103
+	float  yesterdayImagineRealDegree;//æ˜¨è™šå®åº¦	//	4	107
+	float  imagineRealDegree;//ä»Šè™šå®åº¦	//	4	111
+	float  buyPrice1;//ç”³ä¹°ä»·1	//	4	115
+	float  sellPrice1;//ç”³å–ä»·1	//	4	119
+	int	   buyAmount1;//ç”³ä¹°é‡1	//	4	123
+	int	   sellAmount1;//ç”³å–é‡1	//	4	127
+	float  buyPrice2;//ç”³ä¹°ä»·2	//	4	131
+	float  sellPrice2;//ç”³å–ä»·2	//	4	135
+	int    buyAmount2;//ç”³ä¹°é‡2	//	4	139
+	int    sellAmount2;//ç”³å–é‡2	//	4	143
+	float  buyPrice3;//ç”³ä¹°ä»·3	//	4	147
+	float  sellPrice3;//ç”³å–ä»·3	//	4	151
+	int	   buyAmount3;//ç”³ä¹°é‡3	//	4	155
+	int	   sellAmount3;//ç”³å–é‡3	//	4	159
+	float  buyPrice4;//ç”³ä¹°ä»·4	//	4	163
+	float  sellPrice4;//ç”³å–ä»·4	//	4	167
+	int	   buyAmount4;//ç”³ä¹°é‡4	//	4	171
+	int    sellAmount4;//ç”³å–é‡4	//	4	175
+	float  buyPrice5;//ç”³ä¹°ä»·5	//	4	179
+	float  sellPrice5;//ç”³å–ä»·5	//	4	183
+	int    buyAmount5;//ç”³ä¹°é‡5	//	4	187
+	int	   sellAmount5;//ç”³å–é‡5	//	4	191
+	//æ— æ•ˆ	æ— æ•ˆ	//	61	195-255
 }XQN_MD,*P_XQN_MD;
 #pragma pack()
 
