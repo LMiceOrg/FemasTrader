@@ -128,6 +128,9 @@ int main(int argc, char* argv[]) {
     c32& mc_group = cfg.mc_group;
     c32& mc_bindip = cfg.mc_bindip;
 
+    /* Init OrderInsert Flags */
+    g_cur_status.done_flag = 1;
+
     /** Init args, forecaster */
     init_forecaster(&args.forecaster);
 
