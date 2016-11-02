@@ -2,6 +2,7 @@
 #define FORECASTER_H_INCLUDED
 
 #include "ChinaL1DiscreteFeature.h"
+#include "RollScheme.h"
 #include <map>
 #include <vector>
 #include <string>
@@ -54,4 +55,39 @@ public:
     HC_0_Forecaster(struct tm& date);
 };
 
+class HC_1_Forecaster:public Forecaster
+{
+
+public:
+    HC_1_Forecaster(struct tm& date);
+};
+
+class HC2_1_Forecaster:public Forecaster
+{
+
+public:
+    HC2_1_Forecaster(struct tm& date);
+};
+
+class RU_0_Forecaster:public Forecaster
+{
+
+public:
+    RU_0_Forecaster(struct tm& date);
+};
+
+
+class RB_0_Forecaster:public Forecaster
+{
+
+public:
+    RB_0_Forecaster(struct tm& date);
+};
+
+class RB2_0_Forecaster:public Forecaster
+{
+
+public:
+    RB2_0_Forecaster(struct tm& date);
+};
 #endif // FORECASTER_H_INCLUDED

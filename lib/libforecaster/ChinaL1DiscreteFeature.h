@@ -18,6 +18,7 @@ struct Dummy_ChinaL1Msg {
     double m_limit_down;
 };
 
+
 class ChinaL1Msg {
 public:
 	ChinaL1Msg();
@@ -143,7 +144,7 @@ private:
 class ChinaL1DiscreteSelfTradeImbalanceFeature: public ChinaL1DiscreteSelfFeature {
 public:
 	ChinaL1DiscreteSelfTradeImbalanceFeature(double weight,
-			std::string& trading_instrument, double contract_size);
+			std::string& trading_instrument, double contract_size, double tick_size);
 	void reset();
 
 protected:
@@ -151,6 +152,7 @@ protected:
 
 private:
 	double const m_contract_size;
+	double const m_tick_size;
 	double m_prev_time;
 	double m_prev_bid;
 	double m_prev_offer;
@@ -158,6 +160,28 @@ private:
 	double m_prev_notional;
 
 };
+
+class ChinaL1DiscreteSelfTradeImbalanceFeatureV2: public ChinaL1DiscreteSelfFeature {
+public:
+	ChinaL1DiscreteSelfTradeImbalanceFeatureV2(double weight,
+			std::string& trading_instrument, double book_decay,
+			double contract_size, double tick_size);
+	void reset();
+
+protected:
+	void handleSelfMsg(const ChinaL1Msg& msg);
+
+private:
+	EMA m_book;
+	double const m_contract_size;
+	double const m_tick_size;
+	double m_prev_bid;
+	double m_prev_offer;
+	double m_prev_volume;
+	double m_prev_notional;
+
+};
+
 
 class ChinaL1DiscreteSelfBookImbalanceFeature: public ChinaL1DiscreteSelfFeature {
 public:
@@ -169,6 +193,24 @@ protected:
 
 private:
 	double const m_tick_size;
+
+};
+
+class ChinaL1DiscreteSelfOrderFlowImbalanceFeature: public ChinaL1DiscreteSelfFeature {
+public:
+	ChinaL1DiscreteSelfOrderFlowImbalanceFeature(double weight,
+			std::string& trading_instrument, double tick_size);
+	void reset();
+
+protected:
+	void handleSelfMsg(const ChinaL1Msg& msg);
+
+private:
+	double const m_tick_size;
+	double m_prev_bid;
+	double m_prev_offer;
+	double m_prev_bid_qty;
+	double m_prev_offer_qty;
 
 };
 
@@ -251,7 +293,7 @@ public:
 	ChinaL1DiscreteOtherTradeImbalanceFeature(double weight,
 			std::string& trading_instrument, std::string& reference_instrument,
 			int64_t cutoff_time, double ratio_mics, bool use_diff,
-			bool corr_negative, double contract_size);
+			bool corr_negative, double contract_size, double tick_size);
 	void reset();
 
 protected:
@@ -260,6 +302,7 @@ protected:
 
 private:
 	double const m_contract_size;
+	double const m_tick_size;
 	double m_cur_other_bid;
 	double m_cur_other_offer;
 	double m_cur_other_volume;
@@ -269,6 +312,36 @@ private:
 	double m_prev_other_volume;
 	double m_prev_other_notional;
 	double m_prev_time;
+	double m_prev_bid;
+	double m_prev_offer;
+
+};
+
+
+class ChinaL1DiscreteOtherTradeImbalanceFeatureV2: public ChinaL1DiscreteOtherTranslationFeature {
+public:
+	ChinaL1DiscreteOtherTradeImbalanceFeatureV2(double weight,
+			std::string& trading_instrument, std::string& reference_instrument,
+			int64_t cutoff_time, double ratio_mics, bool use_diff,
+			bool corr_negative,double book_decay, double contract_size, double tick_size);
+	void reset();
+
+protected:
+	void handleSelfMsg(const ChinaL1Msg& msg);
+	void handleOtherMsg(const ChinaL1Msg& msg);
+
+private:
+	EMA m_book;
+	double const m_contract_size;
+	double const m_tick_size;
+	double m_cur_other_bid;
+	double m_cur_other_offer;
+	double m_cur_other_volume;
+	double m_cur_other_notional;
+	double m_prev_other_bid;
+	double m_prev_other_offer;
+	double m_prev_other_volume;
+	double m_prev_other_notional;
 	double m_prev_bid;
 	double m_prev_offer;
 
