@@ -18,7 +18,6 @@ struct Dummy_ChinaL1Msg {
     double m_limit_down;
 };
 
-
 class ChinaL1Msg {
 public:
 	ChinaL1Msg();
@@ -87,6 +86,7 @@ public:
 
 class ChinaL1DiscreteFeature: public Feature, public IChinaL1DiscreteListner {
 public:
+	ChinaL1DiscreteFeature(const std::string feature_name, double weight);
 	ChinaL1DiscreteFeature(double weight);
 	virtual ~ChinaL1DiscreteFeature() {
 	}
@@ -95,6 +95,7 @@ public:
 
 class ChinaL1DiscreteSelfFeature: public ChinaL1DiscreteFeature {
 public:
+	ChinaL1DiscreteSelfFeature(const std::string feature_name, double weight, std::string& trading_instrument);
 	ChinaL1DiscreteSelfFeature(double weight, std::string& trading_instrument);
 	void handleMsg(const ChinaL1Msg& msg);
 	double get_value() const {
@@ -116,7 +117,7 @@ private:
 
 class ChinaL1DiscreteOtherFeature: public ChinaL1DiscreteFeature {
 public:
-	ChinaL1DiscreteOtherFeature(double weight, std::string& trading_instrument,
+	ChinaL1DiscreteOtherFeature(const std::string feature_name, double weight, std::string& trading_instrument,
 			std::string& reference_instrument, const int64_t cutoff_time);
 	void handleMsg(const ChinaL1Msg& msg);
 	double get_value() const {
@@ -143,6 +144,8 @@ private:
 
 class ChinaL1DiscreteSelfTradeImbalanceFeature: public ChinaL1DiscreteSelfFeature {
 public:
+	ChinaL1DiscreteSelfTradeImbalanceFeature(const std::string feature_name,double weight,
+			std::string& trading_instrument, double contract_size, double tick_size);
 	ChinaL1DiscreteSelfTradeImbalanceFeature(double weight,
 			std::string& trading_instrument, double contract_size, double tick_size);
 	void reset();
@@ -163,6 +166,9 @@ private:
 
 class ChinaL1DiscreteSelfTradeImbalanceFeatureV2: public ChinaL1DiscreteSelfFeature {
 public:
+	ChinaL1DiscreteSelfTradeImbalanceFeatureV2(const std::string feature_name,double weight,
+			std::string& trading_instrument, double book_decay,
+			double contract_size, double tick_size);
 	ChinaL1DiscreteSelfTradeImbalanceFeatureV2(double weight,
 			std::string& trading_instrument, double book_decay,
 			double contract_size, double tick_size);
@@ -185,8 +191,10 @@ private:
 
 class ChinaL1DiscreteSelfBookImbalanceFeature: public ChinaL1DiscreteSelfFeature {
 public:
-	ChinaL1DiscreteSelfBookImbalanceFeature(double weight,
+	ChinaL1DiscreteSelfBookImbalanceFeature(const std::string feature_name,double weight,
 			std::string& trading_instrument, double tick_size);
+	ChinaL1DiscreteSelfBookImbalanceFeature(double weight,
+				std::string& trading_instrument, double tick_size);
 
 protected:
 	void handleSelfMsg(const ChinaL1Msg& msg);
@@ -198,6 +206,8 @@ private:
 
 class ChinaL1DiscreteSelfOrderFlowImbalanceFeature: public ChinaL1DiscreteSelfFeature {
 public:
+	ChinaL1DiscreteSelfOrderFlowImbalanceFeature(const std::string feature_name,double weight,
+			std::string& trading_instrument, double tick_size);
 	ChinaL1DiscreteSelfOrderFlowImbalanceFeature(double weight,
 			std::string& trading_instrument, double tick_size);
 	void reset();
@@ -216,6 +226,8 @@ private:
 
 class ChinaL1DiscreteSelfDecayingReturnFeature: public ChinaL1DiscreteSelfFeature {
 public:
+	ChinaL1DiscreteSelfDecayingReturnFeature(const std::string feature_name,double weight,
+			std::string& trading_instrument, double decay_mics);
 	ChinaL1DiscreteSelfDecayingReturnFeature(double weight,
 			std::string& trading_instrument, double decay_mics);
 	void reset();
@@ -230,6 +242,10 @@ private:
 
 class ChinaL1DiscreteOtherTranslationFeature: public ChinaL1DiscreteOtherFeature {
 public:
+	ChinaL1DiscreteOtherTranslationFeature(const std::string feature_name,double weight,
+			std::string& trading_instrument, std::string& reference_instrument,
+			int64_t cutoff_time, double ratio_mics, bool use_diff,
+			bool corr_negative);
 	ChinaL1DiscreteOtherTranslationFeature(double weight,
 			std::string& trading_instrument, std::string& reference_instrument,
 			int64_t cutoff_time, double ratio_mics, bool use_diff,
@@ -290,10 +306,15 @@ private:
 
 class ChinaL1DiscreteOtherTradeImbalanceFeature: public ChinaL1DiscreteOtherTranslationFeature {
 public:
-	ChinaL1DiscreteOtherTradeImbalanceFeature(double weight,
+	ChinaL1DiscreteOtherTradeImbalanceFeature(const std::string feature_name,double weight,
 			std::string& trading_instrument, std::string& reference_instrument,
 			int64_t cutoff_time, double ratio_mics, bool use_diff,
 			bool corr_negative, double contract_size, double tick_size);
+	ChinaL1DiscreteOtherTradeImbalanceFeature(double weight,
+				std::string& trading_instrument, std::string& reference_instrument,
+				int64_t cutoff_time, double ratio_mics, bool use_diff,
+				bool corr_negative, double contract_size, double tick_size);
+
 	void reset();
 
 protected:
@@ -320,10 +341,15 @@ private:
 
 class ChinaL1DiscreteOtherTradeImbalanceFeatureV2: public ChinaL1DiscreteOtherTranslationFeature {
 public:
+	ChinaL1DiscreteOtherTradeImbalanceFeatureV2(const std::string feature_name,double weight,
+			std::string& trading_instrument, std::string& reference_instrument,
+			int64_t cutoff_time, double ratio_mics, bool use_diff,
+			bool corr_negative,double book_decay, double contract_size, double tick_size);
 	ChinaL1DiscreteOtherTradeImbalanceFeatureV2(double weight,
 			std::string& trading_instrument, std::string& reference_instrument,
 			int64_t cutoff_time, double ratio_mics, bool use_diff,
 			bool corr_negative,double book_decay, double contract_size, double tick_size);
+
 	void reset();
 
 protected:
@@ -349,10 +375,15 @@ private:
 
 class ChinaL1DiscreteOtherBookImbalanceFeature: public ChinaL1DiscreteOtherTranslationFeature {
 public:
+	ChinaL1DiscreteOtherBookImbalanceFeature(const std::string feature_name,double weight,
+			std::string& trading_instrument, std::string& reference_instrument,
+			int64_t cutoff_time, double ratio_mics, bool use_diff,
+			bool corr_negative, double tick_size);
 	ChinaL1DiscreteOtherBookImbalanceFeature(double weight,
 			std::string& trading_instrument, std::string& reference_instrument,
 			int64_t cutoff_time, double ratio_mics, bool use_diff,
 			bool corr_negative, double tick_size);
+
 	void reset();
 
 protected:
@@ -373,10 +404,15 @@ private:
 
 class ChinaL1DiscreteOtherBestSinceFeature: public ChinaL1DiscreteOtherTranslationFeature {
 public:
+	ChinaL1DiscreteOtherBestSinceFeature(const std::string feature_name,double weight,
+			std::string& trading_instrument, std::string& reference_instrument,
+			int64_t cutoff_time, double ratio_mics, bool use_diff,
+			bool corr_negative);
 	ChinaL1DiscreteOtherBestSinceFeature(double weight,
 			std::string& trading_instrument, std::string& reference_instrument,
 			int64_t cutoff_time, double ratio_mics, bool use_diff,
 			bool corr_negative);
+
 	void reset();
 
 protected:
@@ -394,9 +430,13 @@ private:
 
 class ChinaL1DiscreteOtherDecayingReturnFeature: public ChinaL1DiscreteOtherFeature {
 public:
+	ChinaL1DiscreteOtherDecayingReturnFeature(const std::string feature_name,double weight,
+			std::string& trading_instrument, std::string& reference_instrument,
+			int64_t cutoff_time, double decay_mics);
 	ChinaL1DiscreteOtherDecayingReturnFeature(double weight,
 			std::string& trading_instrument, std::string& reference_instrument,
 			int64_t cutoff_time, double decay_mics);
+
 	void reset();
 
 protected:

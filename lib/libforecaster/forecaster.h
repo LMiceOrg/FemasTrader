@@ -17,17 +17,19 @@ class Forecaster
 public:
 
     Forecaster(){}
+	virtual ~Forecaster();
 
     void update(const ChinaL1Msg& msg);
 
     double get_forecast();
 
-    void get_all_signal( double array[] );
+    void get_all_signal( double **res, int *size );
 
     void reset();
 
-    std::string get_trading_instrument() const{ return m_trading_instrument;}
+    std::string get_trading_instrument() const{ return m_trading_instrument; }
     std::vector<std::string> get_subscriptions() const;
+	std::vector<std::string> get_subsignal_name() const;
 
 protected:
     void addSelfFeature(std::string instr, ChinaL1DiscreteFeature* feature);
@@ -36,6 +38,7 @@ protected:
     std::string m_trading_instrument;
 
     std::vector<std::string> m_subscriptions;
+	std::vector<std::string> m_subsignal_name;
 
 };
 
@@ -74,6 +77,20 @@ class RU_0_Forecaster:public Forecaster
 
 public:
     RU_0_Forecaster(struct tm& date);
+};
+
+class RU2_0_Forecaster:public Forecaster
+{
+
+public:
+    RU2_0_Forecaster(struct tm& date);
+};
+
+class NI2_0_Forecaster:public Forecaster
+{
+
+public:
+    NI2_0_Forecaster(struct tm& date);
 };
 
 
