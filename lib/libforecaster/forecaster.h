@@ -93,6 +93,12 @@ public:
     NI2_0_Forecaster(struct tm& date);
 };
 
+class ZN2_0_Forecaster:public Forecaster
+{
+
+public:
+    ZN2_0_Forecaster(struct tm& date);
+};
 
 class RB_0_Forecaster:public Forecaster
 {
