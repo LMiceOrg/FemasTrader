@@ -63,7 +63,7 @@ public:
 	void set_limit_up(double limit_up);
 	void set_limit_down(double limit_down);
 
-private:
+//private:
 	std::string m_inst;
 	int64_t m_time_micro; // time in epoch micro seconds
 	double m_bid;
@@ -277,7 +277,7 @@ protected:
 				(m_corr_negative ?
 						other_delta * m_ema.get_value() / other_mid
 								/ other_mid :
-						other_delta * m_ema.get_value());
+						other_delta / m_ema.get_value());
 
 	}
 

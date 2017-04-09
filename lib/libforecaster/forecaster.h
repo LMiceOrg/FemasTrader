@@ -86,11 +86,32 @@ public:
     RU2_0_Forecaster(struct tm& date);
 };
 
+class RU2_0_New_Forecaster:public Forecaster
+{
+public:
+	RU2_0_New_Forecaster(struct tm& date);		
+};
+
+
+class RB2_New_Forecaster:public Forecaster
+{
+public:
+	RB2_New_Forecaster(struct tm& date);		
+};
+
+
 class NI2_0_Forecaster:public Forecaster
 {
 
 public:
     NI2_0_Forecaster(struct tm& date);
+};
+
+class NI2_New_Forecaster:public Forecaster
+{
+
+public:
+    NI2_New_Forecaster(struct tm& date);
 };
 
 class ZN2_0_Forecaster:public Forecaster
@@ -100,6 +121,53 @@ public:
     ZN2_0_Forecaster(struct tm& date);
 };
 
+class ZN2_1_Forecaster:public Forecaster
+{
+
+public:
+    ZN2_1_Forecaster(struct tm& date);
+};
+
+class ZN2_2_Forecaster:public Forecaster
+{
+
+public:
+    ZN2_2_Forecaster(struct tm& date);
+};
+
+class AL2_0_Forecaster:public Forecaster
+{
+
+public:
+    AL2_0_Forecaster(struct tm& date);
+};
+
+
+class CU2_0_Forecaster:public Forecaster
+{
+
+public:
+    CU2_0_Forecaster(struct tm& date);
+};
+
+class JM1_0_Forecaster:public Forecaster
+{
+public:
+	JM1_0_Forecaster(struct tm& date);
+};
+
+class P1_0_Forecaster:public Forecaster
+{
+public:
+	P1_0_Forecaster(struct tm& date);
+};
+
+class L1_0_Forecaster:public Forecaster
+{
+public:
+	L1_0_Forecaster(struct tm& date);
+};
+
 class RB_0_Forecaster:public Forecaster
 {
 
@@ -107,10 +175,58 @@ public:
     RB_0_Forecaster(struct tm& date);
 };
 
+class RB_0_test_Forecaster:public Forecaster
+{
+
+public:
+    RB_0_test_Forecaster(struct tm& date);
+};
+
+
 class RB2_0_Forecaster:public Forecaster
 {
 
 public:
     RB2_0_Forecaster(struct tm& date);
 };
+
+#if 1
+
+class NI1_0_Forecaster:public Forecaster
+{
+public:
+	NI1_0_Forecaster(struct tm& date);
+};
+
+class ZN1_0_Forecaster:public Forecaster
+{
+public:
+	ZN1_0_Forecaster(struct tm& date);
+};
+
+class PB1_0_Forecaster:public Forecaster
+{
+public:
+	PB1_0_Forecaster(struct tm& date);
+};
+
+class CU1_0_Forecaster:public Forecaster
+{
+public:
+	CU1_0_Forecaster(struct tm& date);
+};
+
+class AL1_0_Forecaster:public Forecaster
+{
+public:
+	AL1_0_Forecaster(struct tm& date);
+};
+
+class SN1_0_Forecaster:public Forecaster
+{
+public:
+	SN1_0_Forecaster(struct tm& date);
+};
+#endif
+
 #endif // FORECASTER_H_INCLUDED
