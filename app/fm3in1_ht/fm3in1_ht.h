@@ -1,5 +1,6 @@
 #ifndef FM3IN1_HT_H
 #define FM3IN1_HT_H
+#include <xmmintrin.h>
 
 #include "guavaproto.h"
 #include "strategy_status.h"
@@ -54,7 +55,7 @@ struct fm3_config_s {
 typedef struct fm3_config_s fm3_config_t;
 
 enum fm3_enums {
-    FM3_RECV_BUFF_SIZE = 1024,
+    FM3_RECV_BUFF_SIZE = 256,
     FM3_INSTRUMENT_SIZE = 8,
 };
 

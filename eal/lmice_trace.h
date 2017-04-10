@@ -20,7 +20,8 @@ enum lmice_trace_type_e
     lmice_trace_warning     =2,
     lmice_trace_error       =3,
     lmice_trace_critical    =4,
-    lmice_trace_none        =5
+    lmice_trace_none        =5,
+    lmice_trace_time
 };
 
 typedef enum lmice_trace_type_e lmice_trace_type_t;
@@ -267,11 +268,11 @@ typedef struct {
 
 
 
-#define lmice_info_print        printf("%s:(%d)\n", __FILE__, __LINE__);EAL_TRACE_COLOR_PRINT_THREAD(info)
+#define lmice_info_print        EAL_TRACE_COLOR_PRINT_THREAD(info)
 #define lmice_debug_print       printf("%s:(%d)\n", __FILE__, __LINE__); EAL_TRACE_COLOR_PRINT_THREAD(debug)
-#define lmice_warning_print     printf("%s:(%d)\n", __FILE__, __LINE__);EAL_TRACE_COLOR_PRINT_THREAD(warning)
-#define lmice_error_print       printf("%s:(%d)\n", __FILE__, __LINE__);EAL_TRACE_COLOR_PRINT_THREAD(error)
-#define lmice_critical_print    printf("%s:(%d)\n", __FILE__, __LINE__);EAL_TRACE_COLOR_PRINT_THREAD(critical)
+#define lmice_warning_print     EAL_TRACE_COLOR_PRINT_THREAD(warning)
+#define lmice_error_print       EAL_TRACE_COLOR_PRINT_THREAD(error)
+#define lmice_critical_print    EAL_TRACE_COLOR_PRINT_THREAD(critical)
 
 
 #define lmice_info_log(format,...) LMICE_TRACE_PER_THREAD(lmice_trace_info, format, ##__VA_ARGS__)

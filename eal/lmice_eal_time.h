@@ -27,7 +27,6 @@ typedef struct lmice_timer_context_s lm_timer_ctx_t;
 
 
 #if defined(__MACH__)
-
 #include <mach/clock.h>
 #include <mach/mach.h>
 #include <mach/mach_time.h> /* mach_absolute_time */
@@ -42,11 +41,23 @@ forceinline int eal_time_factor(uint64_t* factor) {
     return 0;
 }
 
+/* the 100-nano seconds since boot */
+forceinline int get_tick_count(int64_t* t)
+{
+    *t = mach_absolute_time() /100LL;
+    return 0;
+}
+
 /* the UTC time since 1970-01-01 */
 forceinline int  get_system_time(int64_t* t) {
-    uint64_t tick = 0;
-    tick = mach_absolute_time();
-    *t = tick / 100llu;
+
+    clock_serv_t cclock;
+    mach_timespec_t mts;
+    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+    clock_get_time(cclock, &mts);
+    mach_port_deallocate(mach_task_self(), cclock);
+
+    *t = (int64_t)mts.tv_sec*10000000LL + mts.tv_nsec/100LL;
     return 0;
 }
 

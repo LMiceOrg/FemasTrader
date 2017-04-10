@@ -1,6 +1,7 @@
 #include "lmice_trace.h"
 #include "lmice_eal_time.h"
 #include <stdint.h>
+#include <stdio.h>
 
 #if defined(_DEBUG)
 const int lmice_trace_debug_mode = 1;
@@ -28,28 +29,28 @@ lmice_trace_name_t lmice_trace_name[] =
     {lmice_trace_warning,   "WARNING",  "\033[1;33m" /*yellow*/},
     {lmice_trace_error,     "ERROR",    "\033[1;31m" /*light_red*/},
     {lmice_trace_critical,  "CRITICAL", "\033[1;35m" /* light_purple*/},
-    {lmice_trace_none,"NULL","\033[0m"}
+    {lmice_trace_none,"NULL","\033[0m"},
+    {lmice_trace_time, "TIME", "\033[1;33m" /*light_brown*/}
 };
 
 #endif
+
+#define LMICE_TRACE_COLOR_TIME(tm) lmice_trace_name[lmice_trace_time].color, tm, lmice_trace_name[lmice_trace_none].color
 
 #define EAL_TRACE_0() \
     int64_t _trace_stm; \
     int _trace_ret; \
     time_t _trace_tm;   \
-    char _trace_current_time[40]; \
+    struct tm pt;  \
+    char _trace_current_time[80];   \
     char _trace_thread_name[32]; \
     if(lmice_trace_debug_mode == 0 && type == lmice_trace_debug) \
         return; \
-    memset(_trace_current_time, 0, 40); \
+    memset(_trace_current_time, 0, sizeof(_trace_current_time));    \
     get_system_time(&_trace_stm);   \
     _trace_tm =_trace_stm / 10000000;   \
-    ctime_r(&_trace_tm, _trace_current_time); \
-    _trace_current_time[24] = ' '; \
-    sprintf(_trace_current_time+25, "%03ld:%03ld:%03ld", \
-        (_trace_stm % 10000000) / 10000,   \
-        (_trace_stm % 10000) / 10,   \
-        (_trace_stm % 10) * 100 );  \
+    gmtime_r(&_trace_tm, &pt);  \
+    sprintf(_trace_current_time, "%4d-%02d-%02d %02d:%02d:%02d.%07lld", pt.tm_year+1900, pt.tm_mon+1, pt.tm_mday, pt.tm_hour, pt.tm_min, pt.tm_sec, _trace_stm%10000000);  \
     /*change newline to space */ \
     _trace_ret = pthread_getname_np(eal_gettid(), _trace_thread_name, 32); \
     if(_trace_ret == 0) { \
@@ -69,11 +70,11 @@ lmice_trace_name_t lmice_trace_name[] =
 #elif defined(__APPLE__) || defined(__linux__)
 #define EAL_TRACE_UNIX() \
     if(_trace_ret == 0) {   \
-        printf("%s%s%s%s:[%d:%s]",  \
-            _trace_current_time, LMICE_TRACE_COLOR_TAG3(type), getpid(), _trace_thread_name); \
+        printf("%s%s%s %s%s%s:[%d:%s]",  \
+            LMICE_TRACE_COLOR_TIME(_trace_current_time), LMICE_TRACE_COLOR_TAG3(type), getpid(), _trace_thread_name); \
     } else { \
-        printf("%s%s%s%s:[%d:0x%lx]",    \
-            _trace_current_time, LMICE_TRACE_COLOR_TAG3(type), getpid(), (void*)eal_gettid()); \
+        printf("%s%s%s %s%s%s:[%d:0x%lx]",    \
+            LMICE_TRACE_COLOR_TIME(_trace_current_time), LMICE_TRACE_COLOR_TAG3(type), getpid(), (unsigned long)(void*)eal_gettid()); \
     }
 #endif
 

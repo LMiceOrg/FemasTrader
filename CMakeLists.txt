@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-PROJECT(eal)
+PROJECT(fmtrader)
 
 set(CMAKE_VERBOSE_MAKEFILE off)
 
@@ -265,7 +265,7 @@ LIST(APPEND his_sim_src app/his_sim/netmd.cpp
 )
 add_executable(his_sim ${his_sim_src})
 
-target_link_libraries(his_sim model_static eal_static pthread rt ${femas_libs} pcap ${fc_libs})
+target_link_libraries(his_sim model_static eal_static pthread rt ${femas_libs} pcap ${fc_libs} ${bson_libs})
 add_dependencies(his_sim model_static)
 add_dependencies(his_sim eal_static)
 
