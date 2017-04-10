@@ -102,6 +102,11 @@ forceinline int eal_timer_delete(dispatch_source_t timer)
 #include <stdint.h>
 
 /*POSIX.1-2001*/
+
+/* the 100-nano seconds since boot */
+#define get_tick_count get_system_time
+
+
 forceinline int  get_system_time(int64_t* t)
 {
     int ret = 0;
